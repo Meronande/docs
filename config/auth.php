@@ -49,6 +49,15 @@ function setting(string $key, $default = null)
 
 function csrf_token(): string
 {
+    if (PHP_SAPI !== 'cli' && session_status() === PHP_SESSION_NONE) {
+        // Late caller (e.g. output already started elsewhere): fall back to a
+        // per-request token so we never emit an empty field.
+        static $fallback = null;
+        if ($fallback === null) {
+            $fallback = hash('sha256', session_id() ?: (microtime() . random_bytes(8)));
+        }
+        return $fallback;
+    }
     if (empty($_SESSION['csrf_token'])) {
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
@@ -63,7 +72,10 @@ function csrf_field(): string
 function verify_csrf(?string $token = null): bool
 {
     $token = $token ?? ($_POST['csrf_token'] ?? $_SERVER['HTTP_X_CSRF_TOKEN'] ?? '');
-    return is_string($token) && $token !== '' && hash_equals($_SESSION['csrf_token'] ?? '', $token);
+    if (!is_string($token) || $token === '' || empty($_SESSION['csrf_token'])) {
+        return false;
+    }
+    return hash_equals((string) $_SESSION['csrf_token'], $token);
 }
 
 /** Require a valid CSRF token for POST/AJAX; dies with 403 otherwise. */
