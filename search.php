@@ -23,10 +23,12 @@ if ($q !== '') {
          WHERE (full_name LIKE ? OR patient_code LIKE ? OR phone LIKE ?)$bPatients LIMIT 8",
         [$like, $like, $like]
     );
-    if ($rows) $found['Patients'] = array_map(fn($r) => [
-        'icon' => 'fa-hospital-user', 'title' => $r['full_name'], 'sub' => ($r['patient_code'] ?? '') . ($r['phone'] ? ' · ' . $r['phone'] : ''),
-        'url' => '/patients/view/' . (int) $r['id'],
-    ], $rows);
+    if ($rows) $found['Patients'] = array_map(function ($r) {
+        return [
+            'icon' => 'fa-hospital-user', 'title' => $r['full_name'], 'sub' => ($r['patient_code'] ?? '') . ($r['phone'] ? ' · ' . $r['phone'] : ''),
+            'url' => '/patients/view/' . (int) $r['id'],
+        ];
+    }, $rows);
 
     // Doctors
     $rows = db_fetch_all(
@@ -35,10 +37,12 @@ if ($q !== '') {
          WHERE d.full_name LIKE ? GROUP BY d.id, d.full_name, s.name LIMIT 8',
         [$like]
     );
-    if ($rows) $found['Doctors'] = array_map(fn($r) => [
-        'icon' => 'fa-user-doctor', 'title' => 'Dr. ' . $r['full_name'], 'sub' => $r['specs'] ?: 'General practice',
-        'url' => '/doctors',
-    ], $rows); // doctors module has no detail page
+    if ($rows) $found['Doctors'] = array_map(function ($r) {
+        return [
+            'icon' => 'fa-user-doctor', 'title' => 'Dr. ' . $r['full_name'], 'sub' => $r['specs'] ?: 'General practice',
+            'url' => '/doctors',
+        ];
+    }, $rows); // doctors module has no detail page
 
     // Appointments
     $rows = db_fetch_all(
@@ -47,10 +51,12 @@ if ($q !== '') {
          WHERE (a.appointment_code LIKE ? OR p.full_name LIKE ?)$bGeneric LIMIT 8",
         [$like, $like]
     );
-    if ($rows) $found['Appointments'] = array_map(fn($r) => [
-        'icon' => 'fa-calendar-check', 'title' => ($r['appointment_code'] ?? '#' . $r['id']) . ' — ' . $r['patient_name'],
-        'sub' => fmt_date($r['appointment_date'], true), 'url' => '/appointments/view/' . (int) $r['id'],
-    ], $rows);
+    if ($rows) $found['Appointments'] = array_map(function ($r) {
+        return [
+            'icon' => 'fa-calendar-check', 'title' => ($r['appointment_code'] ?? '#' . $r['id']) . ' — ' . $r['patient_name'],
+            'sub' => fmt_date($r['appointment_date'], true), 'url' => '/appointments/view/' . (int) $r['id'],
+        ];
+    }, $rows);
 
     // Invoices
     $rows = db_fetch_all(
@@ -59,10 +65,12 @@ if ($q !== '') {
          WHERE (i.invoice_number LIKE ? OR p.full_name LIKE ?)$bGeneric LIMIT 8",
         [$like, $like]
     );
-    if ($rows) $found['Invoices'] = array_map(fn($r) => [
-        'icon' => 'fa-file-invoice-dollar', 'title' => ($r['invoice_number'] ?? '#' . $r['id']) . ' — ' . $r['patient_name'],
-        'sub' => money($r['total']) . ' · ' . label_case($r['status']), 'url' => '/billing/view/' . (int) $r['id'],
-    ], $rows);
+    if ($rows) $found['Invoices'] = array_map(function ($r) {
+        return [
+            'icon' => 'fa-file-invoice-dollar', 'title' => ($r['invoice_number'] ?? '#' . $r['id']) . ' — ' . $r['patient_name'],
+            'sub' => money($r['total']) . ' · ' . label_case($r['status']), 'url' => '/billing/view/' . (int) $r['id'],
+        ];
+    }, $rows);
 
     // Medicines
     $rows = db_fetch_all(
@@ -70,11 +78,13 @@ if ($q !== '') {
          WHERE (medicine_name LIKE ? OR generic_name LIKE ?)$bGeneric LIMIT 8",
         [$like, $like]
     );
-    if ($rows) $found['Medicines'] = array_map(fn($r) => [
-        'icon' => 'fa-pills', 'title' => $r['medicine_name'],
-        'sub' => ($r['generic_name'] ? $r['generic_name'] . ' · ' : '') . 'Stock: ' . (int) $r['stock_quantity'],
-        'url' => '/pharmacy',
-    ], $rows);
+    if ($rows) $found['Medicines'] = array_map(function ($r) {
+        return [
+            'icon' => 'fa-pills', 'title' => $r['medicine_name'],
+            'sub' => ($r['generic_name'] ? $r['generic_name'] . ' · ' : '') . 'Stock: ' . (int) $r['stock_quantity'],
+            'url' => '/pharmacy',
+        ];
+    }, $rows);
 }
 
 ui_page_open(['title' => 'Search', 'icon' => 'fa-magnifying-glass', 'breadcrumb' => ['Search' => null]]);

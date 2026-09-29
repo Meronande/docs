@@ -13,14 +13,24 @@ $from = get('from', '');
 $to = get('to', '');
 $branchId = scope_branch_id();
 
-[$dateFrom, $dateTo] = match ($range) {
-    'today' => [date('Y-m-d'), date('Y-m-d')],
-    'week' => [date('Y-m-d', strtotime('monday this week')), date('Y-m-d')],
-    'month' => [date('Y-m-01'), date('Y-m-d')],
-    'year' => [date('Y-01-01'), date('Y-m-d')],
-    'custom' => [valid_date($from) ? $from : date('Y-m-01'), valid_date($to) ? $to : date('Y-m-d')],
-    default => [date('Y-m-01'), date('Y-m-d')],
-};
+switch ($range) {
+    case 'today':
+        $dateFrom = date('Y-m-d'); $dateTo = date('Y-m-d');
+        break;
+    case 'week':
+        $dateFrom = date('Y-m-d', strtotime('monday this week')); $dateTo = date('Y-m-d');
+        break;
+    case 'year':
+        $dateFrom = date('Y-01-01'); $dateTo = date('Y-m-d');
+        break;
+    case 'custom':
+        $dateFrom = valid_date($from) ? $from : date('Y-m-01');
+        $dateTo = valid_date($to) ? $to : date('Y-m-d');
+        break;
+    default:
+        $dateFrom = date('Y-m-01'); $dateTo = date('Y-m-d');
+        break;
+}
 
 // ---------------------------------------------------------------------
 // Helper to run branch-scoped aggregates
@@ -272,7 +282,7 @@ ui_page_open(['title' => 'Dashboard', 'icon' => 'fa-gauge-high']);
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   if (typeof Chart === 'undefined') return;
-  const labels = <?= json_encode(array_map(fn($d) => in_array($range, ['today','week'], true) ? date('d M', strtotime($d)) : date('M y', strtotime($d . '-01')), array_keys($patientsSeries))) ?>;
+  const labels = <?= json_encode(array_map(function ($d) use ($range) { return in_array($range, ['today','week'], true) ? date('d M', strtotime($d)) : date('M y', strtotime($d . '-01')); }, array_keys($patientsSeries))) ?>;
   const grid = { color: '#eef1f5' };
   const baseOpts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { grid: { display: false } }, y: { grid, beginAtZero: true } } };
 

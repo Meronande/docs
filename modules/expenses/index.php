@@ -26,7 +26,8 @@ else {
     if ($branchId !== null) { $where .= ' AND ex.branch_id = ?'; $params[] = $branchId; }
 }
 
-$branchScope = (fn() => scope_branch_id() !== null ? ' AND branch_id = ' . scope_branch_id() : '')();
+$__scopeBranchId = scope_branch_id();
+$branchScope = $__scopeBranchId !== null ? ' AND branch_id = ' . (int) $__scopeBranchId : '';
 $stats = [
     'total' => (float) db_fetch_value('SELECT COALESCE(SUM(amount),0) FROM expenses WHERE 1=1' . $branchScope),
     'month' => (float) db_fetch_value('SELECT COALESCE(SUM(amount),0) FROM expenses WHERE expense_date >= DATE_FORMAT(CURDATE(), "%Y-%m-01")' . $branchScope),

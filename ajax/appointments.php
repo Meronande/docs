@@ -27,7 +27,7 @@ if (isset($_GET['slots'])) {
          WHERE a.doctor_id = ? AND a.appointment_date = ? AND (s.status_name IS NULL OR s.status_name NOT IN ('Cancelled','No Show'))",
         [$doctorId, $date], 'is'
     );
-    json_response(['ok' => true, 'slots' => array_map(fn($r) => substr($r['appointment_time'], 0, 5), $rows)]);
+    json_response(['ok' => true, 'slots' => array_map(function ($r) { return substr($r['appointment_time'], 0, 5); }, $rows)]);
 }
 
 // ---------------------------------------------------------------------
@@ -163,7 +163,7 @@ if (post('action') === 'save') {
                 'notes' => post('notes') ?: null,
             ];
             if ($id) {
-                $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
+                $set = implode(', ', array_map(function ($c) { return "`$c` = ?"; }, array_keys($data)));
                 db_execute("UPDATE appointments SET $set WHERE id = ?", array_merge(array_values($data), [$id]));
                 audit_log('update', 'Appointment', $id, 'Updated appointment for ' . $patient['full_name']);
                 return $id;

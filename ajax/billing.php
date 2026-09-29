@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && get('form') === 'invoice') {
     echo '</div></form>';
 
     $html = ob_get_clean();
-    $svcJson = json_encode(array_map(fn($s) => ['id' => (int) $s['id'], 'name' => $s['service_name'], 'price' => (float) $s['price']],
+    $svcJson = json_encode(array_map(function ($s) { return ['id' => (int) $s['id'], 'name' => $s['service_name'], 'price' => (float) $s['price']]; },
         db_fetch_all('SELECT id, service_name, price FROM services WHERE status = 1 ORDER BY service_name')));
     $html .= <<<JS
 <script>

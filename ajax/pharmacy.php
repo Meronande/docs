@@ -159,7 +159,7 @@ if (post('action') === 'save_medicine') {
     try {
         $medId = db_transaction(function () use ($data, $id) {
             if ($id) {
-                $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
+                $set = implode(', ', array_map(function ($c) { return "`$c` = ?"; }, array_keys($data)));
                 db_execute("UPDATE medicines SET $set WHERE id = ?", array_merge(array_values($data), [$id]));
                 audit_log('update', 'Medicine', $id, 'Updated medicine: ' . $data['medicine_name']);
                 return $id;
@@ -261,7 +261,7 @@ if (post('action') === 'dispense') {
             }
 
             // Sale
-            $total = array_sum(array_map(fn($it) => $it['qty'] * $it['price'], $items));
+            $total = array_sum(array_map(function ($it) { return $it['qty'] * $it['price']; }, $items));
             $saleCode = generate_code('sale_prefix', 'pharmacy_sales', 'sale_code');
             $saleId = db_execute('INSERT INTO pharmacy_sales (sale_code, prescription_id, patient_id, branch_id, total_amount, sold_by) VALUES (?,?,?,?,?,?)',
                 [$saleCode, $rxId, $rx['patient_id'], $branchId, $total, (int) current_user()['id']]);

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Offline — Clinic Management System</title>
+<style>
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: linear-gradient(150deg, #0b6e6e 0%, #0d8a80 55%, #12b5a2 100%); color: #fff;
+    text-align: center; padding: 2rem;
+  }
+  .box { max-width: 460px; }
+  .badge-icon {
+    width: 84px; height: 84px; border-radius: 22px; background: rgba(255,255,255,.16);
+    display: inline-flex; align-items: center; justify-content: center; font-size: 2.4rem; margin-bottom: 1.4rem;
+  }
+  h1 { font-size: 1.6rem; margin: 0 0 .6rem; }
+  p { opacity: .92; line-height: 1.6; margin: 0 0 1.6rem; }
+  button {
+    background: #fff; color: #0b6e6e; border: 0; border-radius: .6rem;
+    padding: .7rem 1.6rem; font-weight: 600; font-size: 1rem; cursor: pointer;
+  }
+  button:hover { background: #eef7f6; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="badge-icon">&#9877;&#65039;</div>
+    <h1>You are offline</h1>
+    <p>The Clinic Management System needs an internet connection to show live patient data.<br>
+       Check your connection and try again — everything you saved before going offline is safe.</p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>

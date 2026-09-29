@@ -51,6 +51,10 @@ $clinicName = setting('clinic_name', 'Clinic Management System');
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in — <?= e($clinicName) ?></title>
+<link rel="manifest" href="<?= e(base_url()) ?>/manifest.php">
+<meta name="theme-color" content="#0d8a80">
+<link rel="icon" href="<?= e(base_url()) ?>/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="<?= e(base_url()) ?>/assets/icons/icon-192.png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 <style>

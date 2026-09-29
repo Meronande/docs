@@ -35,7 +35,8 @@ $join = ' FROM payments pay
           LEFT JOIN payment_methods m ON m.id = pay.payment_method_id
           LEFT JOIN branches b ON b.id = pay.branch_id';
 
-$branchScope = (fn() => scope_branch_id() !== null ? ' AND branch_id = ' . scope_branch_id() : '')();
+$__scopeBranchId = scope_branch_id();
+$branchScope = $__scopeBranchId !== null ? ' AND branch_id = ' . (int) $__scopeBranchId : '';
 $today = (float) db_fetch_value('SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date >= CURDATE()' . $branchScope);
 $month = (float) db_fetch_value('SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date >= DATE_FORMAT(CURDATE(), "%Y-%m-01")' . $branchScope);
 $totalSum = (float) db_fetch_value("SELECT COALESCE(SUM(pay.amount),0) $join $where", $params);

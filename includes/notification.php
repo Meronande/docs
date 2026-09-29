@@ -5,7 +5,7 @@
 
 function notif_icon(string $type): array
 {
-    return match ($type) {
+    $map = [
         'success'     => ['fa-circle-check', 'text-success'],
         'warning'     => ['fa-triangle-exclamation', 'text-warning'],
         'danger'      => ['fa-circle-exclamation', 'text-danger'],
@@ -14,8 +14,9 @@ function notif_icon(string $type): array
         'pharmacy'    => ['fa-pills', 'text-success'],
         'finance'     => ['fa-money-bill-wave', 'text-warning'],
         'system'      => ['fa-gear', 'text-secondary'],
-        default       => ['fa-circle-info', 'text-primary'],
-    };
+        'info'        => ['fa-circle-info', 'text-primary'],
+    ];
+    return $map[$type] ?? $map['info'];
 }
 
 function notif_badge(string $type): string

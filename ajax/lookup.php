@@ -44,7 +44,7 @@ switch ($type) {
         if ($q !== '') { $sql .= " AND doc.full_name LIKE ?"; $params[] = $like; }
         $sql .= " ORDER BY doc.full_name LIMIT 50";
         $rows = db_fetch_all($sql, $params);
-        $items = array_map(fn($r) => ['id' => $r['id'], 'name' => $r['name'] . ' (' . money($r['consultation_fee']) . ')'], $rows);
+        $items = array_map(function ($r) { return ['id' => $r['id'], 'name' => $r['name'] . ' (' . money($r['consultation_fee']) . ')']; }, $rows);
         break;
 
     case 'services':

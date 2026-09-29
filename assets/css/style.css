@@ -147,6 +147,16 @@ code { color: #b02a37; }
 .table-search { max-width: 260px; }
 .required::after { content: " *"; color: #dc3545; }
 
+/* Help module ------------------------------------------------------- */
+.text-brand { color: var(--brand); }
+.help-hero {
+  background: linear-gradient(135deg, var(--brand-light) 0%, #ffffff 70%);
+  border: 1px solid #cfe5e2;
+}
+.help-steps li::marker { color: var(--brand); font-weight: 700; }
+.help-role-card { border: 1px solid #e4ecec; }
+.help-role-card:hover { border-color: var(--brand); box-shadow: 0 4px 14px rgba(13,138,128,.10); }
+
 /* Print */
 @media print {
   .app-sidebar, .topbar, .app-footer, .btn, .no-print, #sidebarToggle { display: none !important; }

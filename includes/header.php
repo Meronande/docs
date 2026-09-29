@@ -20,6 +20,10 @@ $unread = unread_count();
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="csrf-token" content="<?= e(csrf_token()) ?>">
 <title><?= e($pageTitle) ?> — <?= e($clinicName) ?></title>
+<link rel="manifest" href="<?= e(base_url()) ?>/manifest.php">
+<meta name="theme-color" content="#0d8a80">
+<link rel="icon" href="<?= e(base_url()) ?>/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="<?= e(base_url()) ?>/assets/icons/icon-192.png">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" rel="stylesheet">
 <link href="/assets/css/style.css" rel="stylesheet">
@@ -55,6 +59,16 @@ $unread = unread_count();
         </ul>
       </div>
       <?php endif; ?>
+
+      <!-- Help -->
+      <a class="btn btn-link text-secondary p-1" href="/help" title="Help & PDF guides" aria-label="Help">
+        <i class="fa-regular fa-circle-question fs-5"></i>
+      </a>
+
+      <!-- Install app (PWA) -->
+      <button class="btn btn-sm btn-light border d-none align-middle" id="pwaInstallBtn" type="button" title="Install app on this device">
+        <i class="fa-solid fa-download me-1 text-brand"></i><span class="d-none d-md-inline">Install App</span>
+      </button>
 
       <!-- Notification bell -->
       <div class="dropdown" id="notifDropdown">

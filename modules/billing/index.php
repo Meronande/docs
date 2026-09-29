@@ -32,7 +32,8 @@ if ($branchF !== '' && sees_all_branches()) {
     if ($branchId !== null) { $where .= ' AND i.branch_id = ?'; $params[] = $branchId; }
 }
 
-$branchScope = (fn() => scope_branch_id() !== null ? ' AND branch_id = ' . scope_branch_id() : '')();
+$__scopeBranchId = scope_branch_id();
+$branchScope = $__scopeBranchId !== null ? ' AND branch_id = ' . (int) $__scopeBranchId : '';
 $stats = [
     'total' => (int) db_fetch_value('SELECT COUNT(*) FROM invoices WHERE status != "cancelled"' . $branchScope),
     'unpaid' => (int) db_fetch_value('SELECT COUNT(*) FROM invoices WHERE status = "unpaid"' . $branchScope),

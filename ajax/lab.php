@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && get('form') === 'order') {
     echo '</select></div>';
     echo '<div class="col-12"><hr class="my-1"></div>';
     foreach ($cats as $cat) {
-        $catTests = array_values(array_filter($tests, fn($t) => (string) $t['category_id'] === (string) $cat['id']));
+        $catTests = array_values(array_filter($tests, function ($t) use ($cat) { return (string) $t['category_id'] === (string) $cat['id']; }));
         if (!$catTests) continue;
         echo '<div class="col-md-6"><div class="border rounded p-2 h-100">';
         echo '<div class="small fw-bold text-uppercase text-muted mb-1">' . e($cat['category_name']) . '</div>';

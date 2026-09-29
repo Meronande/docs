@@ -65,11 +65,18 @@ $menu = [
     </div>
   </div>
   <ul class="sidebar-nav">
+    <li class="sidebar-group">
+      <div class="sidebar-group-label">Assistance</div>
+      <ul>
+        <li><a href="/help" class="<?= $currentUri === '/help' ? 'active' : '' ?>">
+          <i class="fa-solid fa-circle-question fa-fw"></i><span>Help &amp; PDF Guides</span></a></li>
+      </ul>
+    </li>
     <?php foreach ($menu as $group): ?>
       <?php
         [$groupPerm] = $group;
         if (!has_permission($groupPerm)) continue;
-        $children = array_values(array_filter($group[4], fn($c) => has_permission($c[0])));
+        $children = array_values(array_filter($group[4], function ($c) { return has_permission($c[0]); }));
         if (!$children) continue;
         $groupActive = false;
         foreach ($children as $c) { if (str_starts_with($currentUri, $c[2])) { $groupActive = true; break; } }

@@ -131,7 +131,7 @@ if ($action === 'save') {
     try {
         $savedId = db_transaction(function () use ($data, $id, $fullName) {
             if ($id) {
-                $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
+                $set = implode(', ', array_map(function ($c) { return "`$c` = ?"; }, array_keys($data)));
                 db_execute("UPDATE patients SET $set WHERE id = ?", array_merge(array_values($data), [$id]));
                 audit_log('update', 'Patient', $id, 'Updated patient: ' . $fullName);
                 return $id;
