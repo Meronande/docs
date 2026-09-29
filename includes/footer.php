@@ -44,5 +44,49 @@ $flashes = take_flashes();
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script>window.__APP = { user: <?= json_encode(['id' => (int) current_user()['id'], 'name' => current_user()['full_name']]) ?> };</script>
 <script src="/assets/js/app.js"></script>
+<script>
+/* PWA: service worker + install prompt ------------------------------------ */
+(function () {
+  'use strict';
+  var PWA_BASE = <?= json_encode(base_url()) ?>;
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function () {
+      navigator.serviceWorker.register(PWA_BASE + '/sw.php').catch(function () { /* offline mode unavailable */ });
+    });
+  }
+
+  var deferredPrompt = null;
+  var installBtn = document.getElementById('pwaInstallBtn');
+
+  function isStandalone() {
+    return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  }
+
+  window.addEventListener('beforeinstallprompt', function (ev) {
+    ev.preventDefault();
+    deferredPrompt = ev;
+    var btn = document.getElementById('pwaInstallBtn');
+    if (btn && !isStandalone()) btn.classList.remove('d-none');
+  });
+
+  document.addEventListener('click', function (ev) {
+    var btn = ev.target.closest('#pwaInstallBtn');
+    if (!btn || !deferredPrompt) return;
+    ev.preventDefault();
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function () { deferredPrompt = null; btn.classList.add('d-none'); });
+  });
+
+  window.addEventListener('appinstalled', function () {
+    deferredPrompt = null;
+    var btn = document.getElementById('pwaInstallBtn');
+    if (btn) btn.classList.add('d-none');
+    if (window.App && App.toast) App.toast('App installed! Launch it from your home screen or desktop.', 'success');
+  });
+
+  if (installBtn && isStandalone()) installBtn.classList.add('d-none');
+})();
+</script>
 </body>
 </html>

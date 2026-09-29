@@ -188,7 +188,7 @@ if (post('action') === 'save') {
                     'diagnosis_id' => post('diagnosis_id') !== '' ? (int) post('diagnosis_id') : null,
                     'treatment' => post('treatment') ?: null, 'notes' => post('notes') ?: null,
                 ];
-                $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
+                $set = implode(', ', array_map(function ($c) { return "`$c` = ?"; }, array_keys($data)));
                 db_execute("UPDATE medical_records SET $set WHERE id = ?", array_merge(array_values($data), [$id]));
                 audit_log('update', 'Medical Record', $id, 'Updated record for ' . $patient['full_name']);
                 return $id;

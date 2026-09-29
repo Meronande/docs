@@ -6,6 +6,12 @@
 $uri = urldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
 $file = __DIR__ . $uri;
 
+// PWA endpoints (dynamic PHP files that must NOT go through the front controller).
+if ($uri === '/manifest.php' || $uri === '/sw.php') {
+    require __DIR__ . $uri;
+    return true;
+}
+
 if ($uri !== '/' && is_file($file) && !preg_match('/\.php$/i', $uri)) {
     return false; // let the built-in server serve css/js/img/uploads
 }

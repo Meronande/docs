@@ -112,7 +112,7 @@ if (get('export') === 'csv') {
     fwrite($out, "\xEF\xBB\xBF");
     fputcsv($out, [$reports[$report]['label'] . ' — ' . $from . ' to ' . $to]);
     fputcsv($out, $headers);
-    foreach ($rows as $r) fputcsv($out, array_map(fn($v) => is_float($v) ? money_raw($v) : $v, array_values((array) $r)));
+    foreach ($rows as $r) fputcsv($out, array_map(function ($v) { return is_float($v) ? money_raw($v) : $v; }, array_values((array) $r)));
     fclose($out);
     audit_log('export', 'Reports', null, 'Exported ' . $reports[$report]['label'] . ' report (' . $from . ' to ' . $to . ')');
     exit;
@@ -202,7 +202,7 @@ switch ($report) {
              FROM payments WHERE payment_date >= DATE_SUB(CURDATE(), INTERVAL 11 MONTH)$bc
              GROUP BY ym ORDER BY ym", $bp);
         echo '<div class="row g-3"><div class="col-lg-6"><div class="card h-100"><div class="card-header py-2"><i class="fa-solid fa-ranking-star me-2 text-brand"></i>Top Services</div>'
-            . '<div class="card-body p-0">' . report_table(['Service', 'Count', 'Total'], array_map(fn($r) => [$r['name'], $r['cnt'], money($r['total'])], $topServices)) . '</div></div></div>';
+            . '<div class="card-body p-0">' . report_table(['Service', 'Count', 'Total'], array_map(function ($r) { return [$r['name'], $r['cnt'], money($r['total'])]; }, $topServices)) . '</div></div></div>';
         echo '<div class="col-lg-6"><div class="card h-100"><div class="card-header py-2"><i class="fa-solid fa-chart-column me-2 text-brand"></i>Monthly Collections (12 mo)</div><div class="card-body"><canvas id="ovChart" height="130"></canvas></div></div></div></div>';
         echo <<<'JS'
 <script>
@@ -210,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const el = document.getElementById('ovChart');
   if (!el || !window.Chart) return;
   const labels = <?= json_encode(array_column($monthly, 'ym')) ?>;
-  const data = <?= json_encode(array_map(fn($r) => (float) $r['total'], $monthly)) ?>;
+  const data = <?= json_encode(array_map(function ($r) { return (float) $r['total']; }, $monthly)) ?>;
   new Chart(el, { type: 'bar', options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } },
     data: { labels, datasets: [{ data, backgroundColor: 'rgba(13,138,128,.75)', borderRadius: 6 }] } });
 });
@@ -229,8 +229,9 @@ JS;
         $byGender = db_fetch_all("SELECT COALESCE(gender,'Unknown') g, COUNT(*) c FROM patients p WHERE p.created_at $dateCond" . str_replace('branch_id', 'p.branch_id', $bc) . " GROUP BY g", $bp);
         echo stat_card('New Patients This Period', $total, 'fa-hospital-user', 'brand');
         echo '<div class="row g-3 mt-0"><div class="col-lg-8"><div class="card"><div class="card-header py-2">Registered Patients</div><div class="card-body p-0">'
-            . report_table(['Code', 'Name', 'Gender', 'Age', 'Phone', 'Branch', 'Registered'], array_map(fn($r) => [
-                $r['patient_code'], $r['full_name'], $r['gender'], $r['age'], $r['phone'], $r['branch_name'], fmt_date($r['created_at'])], $rows))
+            . report_table(['Code', 'Name', 'Gender', 'Age', 'Phone', 'Branch', 'Registered'], array_map(function ($r) {
+                return [$r['patient_code'], $r['full_name'], $r['gender'], $r['age'], $r['phone'], $r['branch_name'], fmt_date($r['created_at'])];
+            }, $rows))
             . '</div><div class="d-flex justify-content-between align-items-center p-3"><span class="small text-muted">' . result_count_label() . '</span>' . pagination_links() . '</div></div></div>';
         echo '<div class="col-lg-4"><div class="card h-100"><div class="card-header py-2">By Gender</div><div class="card-body"><canvas id="patGender" height="200"></canvas></div></div></div></div>';
         echo <<<'JS'
@@ -266,9 +267,10 @@ JS;
              WHERE TIMESTAMP(a.appointment_date, a.appointment_time) $dateCond" . str_replace('branch_id', 'a.branch_id', $bc) . " GROUP BY status", $bp);
         echo stat_card('Appointments This Period', $total, 'fa-calendar-check', 'brand');
         echo '<div class="row g-3 mt-0"><div class="col-lg-8"><div class="card"><div class="card-header py-2">Appointment Log</div><div class="card-body p-0">'
-            . report_table(['Code', 'Date', 'Patient', 'Doctor', 'Type', 'Status'], array_map(fn($r) => [
-                $r['appointment_code'], fmt_date($r['appt_at'], true), $r['patient_name'],
-                $r['doctor_name'] ? 'Dr. ' . $r['doctor_name'] : '—', $r['type_name'], $r['status']], $rows))
+            . report_table(['Code', 'Date', 'Patient', 'Doctor', 'Type', 'Status'], array_map(function ($r) {
+                return [$r['appointment_code'], fmt_date($r['appt_at'], true), $r['patient_name'],
+                    $r['doctor_name'] ? 'Dr. ' . $r['doctor_name'] : '—', $r['type_name'], $r['status']];
+            }, $rows))
             . '</div><div class="d-flex justify-content-between align-items-center p-3"><span class="small text-muted">' . result_count_label() . '</span>' . pagination_links() . '</div></div></div>';
         echo '<div class="col-lg-4"><div class="card h-100"><div class="card-header py-2">By Status</div><div class="card-body"><canvas id="aptStatus" height="200"></canvas></div></div></div></div>';
         echo <<<'JS'
@@ -304,9 +306,10 @@ JS;
              WHERE i.created_at $dateCond AND i.status != 'cancelled'" . str_replace('branch_id', 'i.branch_id', $bc) . "
              ORDER BY i.id DESC LIMIT $perPage OFFSET $offset", $bp);
         echo '<div class="card"><div class="card-header py-2">Invoices</div><div class="card-body p-0">'
-            . report_table(['Invoice', 'Date', 'Patient', 'Subtotal', 'Disc.', 'Tax', 'Total', 'Paid', 'Balance', 'Status'], array_map(fn($r) => [
-                $r['invoice_number'], fmt_date($r['created_at']), $r['patient_name'], money($r['subtotal']), money($r['discount']),
-                money($r['tax']), money($r['total']), money($r['paid_amount']), money($r['balance']), label_case($r['status'])], $rows))
+            . report_table(['Invoice', 'Date', 'Patient', 'Subtotal', 'Disc.', 'Tax', 'Total', 'Paid', 'Balance', 'Status'], array_map(function ($r) {
+                return [$r['invoice_number'], fmt_date($r['created_at']), $r['patient_name'], money($r['subtotal']), money($r['discount']),
+                    money($r['tax']), money($r['total']), money($r['paid_amount']), money($r['balance']), label_case($r['status'])];
+            }, $rows))
             . '</div><div class="d-flex justify-content-between align-items-center p-3"><span class="small text-muted">' . result_count_label() . '</span>' . pagination_links() . '</div></div>';
         break;
 
@@ -318,7 +321,7 @@ JS;
              FROM expenses ex LEFT JOIN expense_categories c ON c.id = ex.category_id
              WHERE ex.expense_date $dateCond$bc GROUP BY name ORDER BY total DESC LIMIT 12", $bp);
         echo '<div class="row g-3 mt-0"><div class="col-lg-7"><div class="card"><div class="card-header py-2">By Category</div><div class="card-body p-0">'
-            . report_table(['Category', 'Count', 'Total'], array_map(fn($r) => [$r['name'], $r['cnt'], money($r['total'])], $byCat))
+            . report_table(['Category', 'Count', 'Total'], array_map(function ($r) { return [$r['name'], $r['cnt'], money($r['total'])]; }, $byCat))
             . '</div></div></div>';
         echo '<div class="col-lg-5"><div class="card h-100"><div class="card-header py-2">Share</div><div class="card-body"><canvas id="expChart" height="220"></canvas></div></div></div></div>';
         echo <<<'JS'
@@ -357,11 +360,12 @@ JS;
              JOIN pharmacy_sales s ON s.id = si.sale_id
              WHERE s.created_at $dateCond$bc GROUP BY m.medicine_name ORDER BY total DESC LIMIT 10", $bp);
         echo '<div class="card mb-3"><div class="card-header py-2">Top Medicines</div><div class="card-body p-0">'
-            . report_table(['Medicine', 'Qty Sold', 'Revenue'], array_map(fn($r) => [$r['medicine_name'], (int) $r['qty'], money($r['total'])], $topMeds))
+            . report_table(['Medicine', 'Qty Sold', 'Revenue'], array_map(function ($r) { return [$r['medicine_name'], (int) $r['qty'], money($r['total'])]; }, $topMeds))
             . '</div></div>';
         echo '<div class="card"><div class="card-header py-2">Sales</div><div class="card-body p-0">'
-            . report_table(['Sale', 'Date', 'Patient', 'Items', 'Amount'], array_map(fn($r) => [
-                $r['sale_code'], fmt_date($r['created_at'], true), $r['patient_name'], $r['items'], money($r['total_amount'])], $rows))
+            . report_table(['Sale', 'Date', 'Patient', 'Items', 'Amount'], array_map(function ($r) {
+                return [$r['sale_code'], fmt_date($r['created_at'], true), $r['patient_name'], $r['items'], money($r['total_amount'])];
+            }, $rows))
             . '</div><div class="d-flex justify-content-between align-items-center p-3"><span class="small text-muted">' . result_count_label() . '</span>' . pagination_links() . '</div></div>';
         break;
 
@@ -386,12 +390,13 @@ JS;
              LEFT JOIN laboratory_tests lt ON lt.id = loi.test_id
              WHERE lo.created_at $dateCond$bc GROUP BY lt.test_name ORDER BY cnt DESC LIMIT 10", $bp);
         echo '<div class="row g-3 mt-0"><div class="col-lg-7"><div class="card"><div class="card-header py-2">Top Tests</div><div class="card-body p-0">'
-            . report_table(['Test', 'Orders'], array_map(fn($r) => [$r['test_name'] ?? 'N/A', $r['cnt']], $topTests))
+            . report_table(['Test', 'Orders'], array_map(function ($r) { return [$r['test_name'] ?? 'N/A', $r['cnt']]; }, $topTests))
             . '</div></div></div>';
         echo '<div class="col-lg-5"><div class="card h-100"><div class="card-header py-2">By Status</div><div class="card-body"><canvas id="labChart" height="200"></canvas></div></div></div></div>';
         echo '<div class="card mt-3"><div class="card-header py-2">Orders</div><div class="card-body p-0">'
-            . report_table(['Order', 'Date', 'Patient', 'Tests', 'Status'], array_map(fn($r) => [
-                $r['order_code'], fmt_date($r['created_at'], true), $r['patient_name'], $r['tests'], label_case($r['status'])], $rows))
+            . report_table(['Order', 'Date', 'Patient', 'Tests', 'Status'], array_map(function ($r) {
+                return [$r['order_code'], fmt_date($r['created_at'], true), $r['patient_name'], $r['tests'], label_case($r['status'])];
+            }, $rows))
             . '</div><div class="d-flex justify-content-between align-items-center p-3"><span class="small text-muted">' . result_count_label() . '</span>' . pagination_links() . '</div></div>';
         echo <<<'JS'
 <script>

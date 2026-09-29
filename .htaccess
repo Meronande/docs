@@ -1,0 +1,26 @@
+# Clinic Management System — Apache config (AppServ/XAMPP compatible)
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+
+  # Let Apache serve real files (css/js/images/icons) directly.
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # PWA files must be served by PHP (correct MIME types).
+  RewriteRule ^manifest\.webmanifest$ manifest.php [L]
+  RewriteRule ^sw\.js$ sw.php [L]
+
+  # Everything else -> front controller (clean URLs: /patients, /help, ...).
+  RewriteRule ^ index.php [QSA,L]
+</IfModule>
+
+# Correct MIME type for the manifest on Apache.
+<IfModule mod_mime.c>
+  AddType application/manifest+json .webmanifest
+</IfModule>
+
+# Basic hardening for the app's own files.
+<FilesMatch "\.(sql|md|mdx|sh)$">
+  Require all denied
+</FilesMatch>

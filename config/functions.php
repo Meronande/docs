@@ -5,6 +5,8 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . '/compat.php';
+
 /** HTML-escape (XSS protection). */
 function e($value): string
 {
@@ -62,15 +64,15 @@ function generate_code(string $prefixSetting, string $table, string $column, int
     return $code;
 }
 
-/** Redirect and exit. */
-function redirect(string $url): never
+/** Redirect and exit. (`never` return type needs PHP 8.1; omitted for older PHP.) */
+function redirect(string $url)
 {
     header('Location: ' . $url);
     exit;
 }
 
 /** JSON response helper for AJAX endpoints. */
-function json_response($data, int $status = 200): never
+function json_response($data, int $status = 200)
 {
     http_response_code($status);
     header('Content-Type: application/json; charset=utf-8');
@@ -191,14 +193,13 @@ function pagination_links(): string
     $p = $GLOBALS['paginator'] ?? null;
     if (!$p || $p['pages'] <= 1) return '';
     $html = '<nav><ul class="pagination pagination-sm mb-0 justify-content-center">';
-    $url = fn(int $n) => e(qs_url('', ['page_no' => $n]));
-    $html .= '<li class="page-item ' . ($p['current'] <= 1 ? 'disabled' : '') . '"><a class="page-link" href="' . $url(max(1, $p['current'] - 1)) . '">&laquo;</a></li>';
+    $html .= '<li class="page-item ' . ($p['current'] <= 1 ? 'disabled' : '') . '"><a class="page-link" href="' . e(qs_url('', ['page_no' => max(1, $p['current'] - 1)])) . '">&laquo;</a></li>';
     $start = max(1, $p['current'] - 2);
     $end = min($p['pages'], $p['current'] + 2);
     for ($i = $start; $i <= $end; $i++) {
-        $html .= '<li class="page-item ' . ($i === $p['current'] ? 'active' : '') . '"><a class="page-link" href="' . $url($i) . '">' . $i . '</a></li>';
+        $html .= '<li class="page-item ' . ($i === $p['current'] ? 'active' : '') . '"><a class="page-link" href="' . e(qs_url('', ['page_no' => $i])) . '">' . $i . '</a></li>';
     }
-    $html .= '<li class="page-item ' . ($p['current'] >= $p['pages'] ? 'disabled' : '') . '"><a class="page-link" href="' . $url(min($p['pages'], $p['current'] + 1)) . '">&raquo;</a></li>';
+    $html .= '<li class="page-item ' . ($p['current'] >= $p['pages'] ? 'disabled' : '') . '"><a class="page-link" href="' . e(qs_url('', ['page_no' => min($p['pages'], $p['current'] + 1)])) . '">&raquo;</a></li>';
     $html .= '</ul></nav>';
     return $html;
 }
@@ -233,8 +234,34 @@ function take_flashes(): array
     return $f;
 }
 
+/** Local clone of pagination_links() content used by legacy call sites (kept for BC). */
+function pagination_url(int $n): string
+{
+    return e(qs_url('', ['page_no' => $n]));
+}
+
 /** Human-friendly enum label. */
 function label_case(string $value): string
 {
     return ucwords(str_replace(['_', '-'], ' ', $value));
+}
+
+/**
+ * Base path of the app ("" when installed at domain root, "/cms" when in a
+ * subfolder). Lets links/assets/PWA files work in both setups. Resolved from
+ * the physical location of config/, so it is correct on any entry file
+ * (index.php, login.php, ajax/*.php, modules/**).
+ */
+function base_url(): string
+{
+    static $base = null;
+    if ($base === null) {
+        $docRoot = str_replace('\\', '/', realpath($_SERVER['DOCUMENT_ROOT'] ?? '') ?: '');
+        $appRoot = str_replace('\\', '/', dirname(__DIR__));
+        $base = '';
+        if ($docRoot !== '' && str_starts_with($appRoot, $docRoot)) {
+            $base = rtrim(substr($appRoot, strlen($docRoot)), '/');
+        }
+    }
+    return $base;
 }

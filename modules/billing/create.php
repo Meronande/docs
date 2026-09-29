@@ -11,7 +11,7 @@ require_permission('billing.create');
 $prePatient = (int) get('patient_id', '0');
 $taxRate = (float) setting('tax_percent', '0');
 $services = db_fetch_all('SELECT id, service_name, price FROM services WHERE status = 1 ORDER BY service_name');
-$svcJson = json_encode(array_map(fn($s) => ['id' => (int) $s['id'], 'name' => $s['service_name'], 'price' => (float) $s['price']], $services));
+$svcJson = json_encode(array_map(function ($s) { return ['id' => (int) $s['id'], 'name' => $s['service_name'], 'price' => (float) $s['price']]; }, $services));
 $cur = e(setting('currency_symbol', 'Br'));
 
 ui_page_open(['title' => 'New Invoice', 'icon' => 'fa-file-circle-plus',

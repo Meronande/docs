@@ -330,7 +330,7 @@ if (post('action') === 'save') {
     try {
         $newId = db_transaction(function () use ($res, $table, $data, $id, $resourceKey) {
             if ($id) {
-                $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
+                $set = implode(', ', array_map(function ($c) { return "`$c` = ?"; }, array_keys($data)));
                 db_execute("UPDATE `$table` SET $set WHERE id = ?", array_merge(array_values($data), [$id]));
                 audit_log('update', $res['title'], $id, 'Updated ' . strtolower($res['title']) . ' #' . $id);
                 return $id;

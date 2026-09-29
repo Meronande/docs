@@ -159,7 +159,7 @@ if (post('action') === 'save') {
                     if ($path) $data['photo'] = $path;
                 }
                 if ($id) {
-                    $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
+                    $set = implode(', ', array_map(function ($c) { return "`$c` = ?"; }, array_keys($data)));
                     db_execute("UPDATE doctors SET $set WHERE id = ?", array_merge(array_values($data), [$id]));
                     $docId = $id;
                     audit_log('update', 'Doctor', $id, 'Updated doctor: ' . $fullName);
@@ -200,7 +200,7 @@ if (post('action') === 'save') {
                     if ($path) $data['photo'] = $path;
                 }
                 if ($id) {
-                    $set = implode(', ', array_map(fn($c) => "`$c` = ?", array_keys($data)));
+                    $set = implode(', ', array_map(function ($c) { return "`$c` = ?"; }, array_keys($data)));
                     db_execute("UPDATE staff SET $set WHERE id = ?", array_merge(array_values($data), [$id]));
                     audit_log('update', 'Staff', $id, 'Updated staff: ' . $fullName);
                     return ['id' => $id, 'msg' => 'Staff member updated.'];
@@ -247,7 +247,7 @@ if (post('action') === 'save') {
         json_response(['ok' => false, 'message' => $ex->getMessage()]);
     } catch (Throwable $ex) {
         $msg = APP_DEBUG ? $ex->getMessage() : 'Something went wrong. Please try again.';
-        if (str_contains($ex->getMessage() ?? '', 'Duplicate entry')) $msg = 'A record with this name already exists.';
+        if (str_contains((string) $ex->getMessage(), 'Duplicate entry')) $msg = 'A record with this name already exists.';
         json_response(['ok' => false, 'message' => $msg]);
     }
 }
