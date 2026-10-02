@@ -8,9 +8,11 @@ define('APP_BOOT', true);
 require_once dirname(__DIR__, 2) . '/config/auth.php';
 require_once dirname(__DIR__, 2) . '/includes/ui.php';
 require_permission('reports.view');
+require_once dirname(__DIR__, 2) . '/config/payroll.php';
 
 $reports = [
     'overview'     => ['label' => 'Overview', 'icon' => 'fa-gauge-high'],
+    'profit'       => ['label' => 'Monthly Profit & Loss', 'icon' => 'fa-scale-balanced'],
     'patients'     => ['label' => 'Patients', 'icon' => 'fa-hospital-user'],
     'appointments' => ['label' => 'Appointments', 'icon' => 'fa-calendar-check'],
     'revenue'      => ['label' => 'Revenue & Payments', 'icon' => 'fa-sack-dollar'],
@@ -176,6 +178,92 @@ function report_table(array $headers, array $rows): string
 }
 
 switch ($report) {
+
+    case 'profit':
+        // -------- Monthly profit & loss --------
+        // Revenue side: payments collected in the period.
+        $mRev = (float) db_fetch_value("SELECT COALESCE(SUM(amount),0) FROM payments WHERE payment_date $dateCond$bc", $bp);
+        $mInvoiceTotal = (float) db_fetch_value("SELECT COALESCE(SUM(total),0) FROM invoices WHERE created_at $dateCond AND status != 'cancelled'" . str_replace('branch_id', 'branch_id', $bc), $bp);
+
+        // Expense side: manual expenses split between Payroll and other categories.
+        $payrollCatId = db_fetch_value("SELECT id FROM expense_categories WHERE category_name = 'Payroll' LIMIT 1");
+        $mExpPayrollBooked = (float) db_fetch_value('SELECT COALESCE(SUM(amount),0) FROM expenses ex WHERE ex.expense_date ' . $dateCond . ($payrollCatId !== null ? ' AND ex.category_id = ' . (int) $payrollCatId : ' AND 1=0') . str_replace('branch_id', 'ex.branch_id', $bc), $bp);
+        $mExpOther = (float) db_fetch_value('SELECT COALESCE(SUM(amount),0) FROM expenses ex WHERE ex.expense_date ' . $dateCond . ($payrollCatId !== null ? ' AND (ex.category_id IS NULL OR ex.category_id <> ' . (int) $payrollCatId . ')' : '') . str_replace('branch_id', 'ex.branch_id', $bc), $bp);
+
+        // Committed payroll (approved/paid) for the months inside the range —
+        // avoids double counting with the booked 'Payroll' expense row above:
+        // only the portion NOT already booked is added.
+        $months = [];
+        $cur = strtotime($from);
+        $end = strtotime($to);
+        while ($cur <= $end) {
+            $months[date('Y-m', $cur)] = true;
+            $cur = strtotime('+1 month', date('Y-m-01', $cur) ? strtotime(date('Y-m-01', $cur)) : $cur);
+        }
+        $months = array_keys($months);
+        $mPayrollCommitted = 0.0;
+        foreach ($months as $ym) {
+            $mPayrollCommitted += payroll_cost_for_month($ym, $branchF !== '' && sees_all_branches() ? (int) $branchF : scope_branch_id());
+        }
+        $mPayrollUnbooked = max(0.0, $mPayrollCommitted - $mExpPayrollBooked);
+
+        // HR salary commitment for context (active staff, not booked anywhere).
+        $mSalaryCommit = staff_salary_total($branchF !== '' && sees_all_branches() ? (int) $branchF : scope_branch_id());
+
+        // Drug loss: expired value at period end (still in stock = potential loss)
+        // plus expired-in-range stock (write-off approximation).
+        $mExpiredNow = expired_stock_value($branchF !== '' && sees_all_branches() ? (int) $branchF : scope_branch_id());
+        $mExpiredInRange = expired_loss_in_range($from, $to, $branchF !== '' && sees_all_branches() ? (int) $branchF : scope_branch_id());
+
+        $mExpTotal = $mExpOther + $mPayrollUnbooked;
+        $mNet = $mRev - $mExpTotal;
+        $mMargin = $mRev > 0 ? ($mNet / $mRev * 100) : 0.0;
+
+        echo '<div class="row g-3 mb-4">';
+        echo stat_card('Revenue Collected', money($mRev), 'fa-sack-dollar', 'success');
+        echo stat_card('Operating Expenses', money($mExpOther), 'fa-receipt', 'warning');
+        echo stat_card('Salaries & Payroll', money($mPayrollUnbooked), 'fa-money-check-dollar', 'danger', has_permission('payroll.view') ? '/payroll' : null);
+        echo stat_card('Net Profit', money($mNet), $mNet >= 0 ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down', $mNet >= 0 ? 'brand' : 'danger');
+        echo '</div>';
+
+        echo '<div class="row g-3"><div class="col-lg-7"><div class="card h-100"><div class="card-header py-2"><i class=\"fa-solid fa-scale-balanced me-2 text-brand\"></i>Profit & Loss — ' . e(fmt_date($from)) . ' to ' . e(fmt_date($to)) . '</div><div class="card-body p-0">';
+        $pl = [
+            ['Revenue collected (payments)', $mRev, false],
+            ['Invoiced (accrual, for reference)', $mInvoiceTotal, true],
+            ['Operating expenses (non-payroll)', -$mExpOther, false],
+            ['Payroll (committed, unbooked portion)', -$mPayrollUnbooked, false],
+            ['— Payroll already booked as expense', $mExpPayrollBooked, true],
+            ['— HR monthly salary commitment (active staff)', $mSalaryCommit, true],
+        ];
+        echo '<table class="table table-sm align-middle mb-0"><tbody>';
+        foreach ($pl as [$label, $val, $muted]) {
+            echo '<tr' . ($muted ? ' class="text-muted"' : '') . '><td class="small ps-3">' . e($label) . '</td><td class="text-end small pe-3" style="width:160px">' . ($val < 0 ? '<span class=\"text-danger\">-' . money(abs($val)) . '</span>' : money($val)) . '</td></tr>';
+        }
+        echo '<tr class="table-light fw-bold"><td class="ps-3">Net Profit / (Loss)</td><td class="text-end pe-3 ' . ($mNet < 0 ? 'text-danger' : 'text-success') . '">' . money($mNet) . '</td></tr>';
+        echo '<tr><td class="small ps-3 text-muted">Profit margin</td><td class="text-end small pe-3 text-muted">' . number_format($mMargin, 1) . '%</td></tr>';
+        echo '</tbody></table></div></div></div>';
+
+        echo '<div class="col-lg-5"><div class="card h-100 border-danger-subtle"><div class="card-header py-2 text-danger-emphasis"><i class=\"fa-solid fa-skull-crossbones me-2 text-danger\"></i>Expired Drug Losses</div><div class="card-body">';
+        echo '<div class="row g-3 text-center">';
+        echo '<div class="col-6"><div class="stat-card d-block py-3"><div class="stat-value text-danger">' . money($mExpiredNow) . '</div><div class="stat-label">Expired stock on hand (purchase value)</div></div></div>';
+        echo '<div class="col-6"><div class="stat-card d-block py-3"><div class="stat-value text-warning">' . money(expiring_soon_value($branchF !== '' && sees_all_branches() ? (int) $branchF : scope_branch_id(), (int) setting('low_stock_alert_days', '30'))) . '</div><div class="stat-label">Expiring within ' . (int) setting('low_stock_alert_days', '30') . ' days</div></div></div>';
+        echo '</div>';
+        echo '<div class="small text-muted mt-3"><i class=\"fa-solid fa-circle-info me-1\"></i>Expired stock on hand is inventory that must be written off. Dispose of expired items in Pharmacy to keep this number accurate — dispensed/expired-cleared stock no longer appears here.</div>';
+        $expList = db_fetch_all('SELECT medicine_name, stock_quantity, unit, purchase_price, expiry_date FROM medicines WHERE status = 1 AND expiry_date IS NOT NULL AND expiry_date < CURDATE() AND stock_quantity > 0' . ($branchF !== '' && sees_all_branches() ? ' AND branch_id = ' . (int) $branchF : '') . ' ORDER BY expiry_date LIMIT 10');
+        if ($expList) {
+            echo '<div class="table-responsive mt-2"><table class="table table-sm mb-0"><thead class=\"table-light\"><tr><th>Medicine</th><th>Qty</th><th>Value</th><th>Expired</th></tr></thead><tbody>';
+            foreach ($expList as $m) {
+                echo '<tr><td class=\"small\">' . e($m['medicine_name']) . '</td><td class=\"small\">' . (int) $m['stock_quantity'] . ' ' . e($m['unit'] ?: '') . '</td><td class=\"small text-danger\">' . money((float) $m['stock_quantity'] * (float) $m['purchase_price']) . '</td><td class=\"small text-muted\">' . fmt_date($m['expiry_date']) . '</td></tr>';
+            }
+            echo '</tbody></table></div>';
+            if (has_permission('pharmacy.view')) {
+                echo '<a class="btn btn-sm btn-outline-danger mt-2" href="/pharmacy?filter=expired"><i class=\"fa-solid fa-pills me-1\"></i>Manage expired stock</a>';
+            }
+        } else {
+            echo '<div class="small text-success mt-2"><i class=\"fa-solid fa-circle-check me-1\"></i>No expired stock on hand — nothing to write off.</div>';
+        }
+        echo '</div></div></div></div>';
+        break;
 
     case 'overview':
         $cards = [

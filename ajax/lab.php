@@ -211,6 +211,26 @@ if (post('action') === 'save_results') {
                             'Results for order ' . ($order['order_code'] ?? '') . ' are ready.', 'laboratory', 'lab_order', $orderId, '/laboratory/view/' . $orderId);
                     }
                 }
+                // OPD flow: if this order came from an OPD referral, transfer it on
+                // to the chosen next stop (default pharmacy) so the patient flows on.
+                $opdSend = db_fetch_one("SELECT * FROM opd_sends WHERE lab_order_id = ? AND status IN ('pending','received','transferred') ORDER BY id DESC LIMIT 1", [$orderId], 'i');
+                if ($opdSend) {
+                    $next = 'pharmacy';
+                    // SET clauses evaluate left-to-right: capture the old
+                    // destination into transferred_from BEFORE overwriting it.
+                    db_execute(
+                        "UPDATE opd_sends SET transferred_from = destination, destination = ?, status = 'pending', transferred_at = NOW(), received_by = NULL WHERE id = ?",
+                        [$next, (int) $opdSend['id']],
+                        'si'
+                    );
+                    audit_log('update', 'OPD Send', (int) $opdSend['id'], 'Lab done — transferred patient to Pharmacy automatically');
+                    notify(
+                        ['permission_key' => 'pharmacy.view', 'branch_id' => $opdSend['branch_id'] !== null ? (int) $opdSend['branch_id'] : null],
+                        'OPD referral transferred',
+                        'Lab results ready — patient transferred from Laboratory to Pharmacy.',
+                        'appointment', 'opd_send', (int) $opdSend['id'], '/opd?tab=pharmacy'
+                    );
+                }
             }
             audit_log('update', 'Lab Order', $orderId, $complete ? 'Completed lab order ' . ($order['order_code'] ?? '') : 'Updated lab results for ' . ($order['order_code'] ?? ''));
         });

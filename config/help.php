@@ -52,7 +52,19 @@ function help_roles(): array
                 ]],
                 ['Reports & Audit', 'fa-chart-line', [
                     'Administration → Reports: finance, patients, pharmacy and lab reports with branch and date filters; export to CSV where available.',
+                    'Reports → Monthly Profit & Loss: revenue vs expenses (including salaries and payroll) with net profit and expired-drug losses.',
                     'Administration → Audit Log: track every login, create, edit and delete action with the responsible user.',
+                ]],
+                ['Payroll (Super Admin)', 'fa-money-check-dollar', [
+                    'Administration → Payroll: create a monthly payroll period — one row per active employee is generated from their HR salary.',
+                    'Adjust bonus, overtime and deductions per employee, then Approve. Approved payroll locks for editing.',
+                    'Mark paid books the net total as a Payroll expense automatically — it then appears in the P&L and expenses reports.',
+                    'Stock alerts: the dashboard warns you about low stock (with reorder cost) and expired drugs (with their money value).',
+                ]],
+                ['Cloud Backup (Supabase)', 'fa-cloud-arrow-up', [
+                    'System Settings → Cloud Backup: Test Connection verifies your Supabase URL and API keys; Back Up Now dumps the full database (schema + data) and uploads it to a private clinic-backups bucket.',
+                    'Configure the integration with three keys in the hosting Keys tab: SUPABASE_URL, SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY (from Supabase Dashboard → Project Settings → API).',
+                    'List Backups shows every stored file; each backup is a .sql file you can restore on any MySQL/MariaDB server. Data leaves the clinic only when you press Back Up Now.',
                 ]],
                 ['Everything else', 'fa-layer-group', [
                     'You automatically have access to all Front Desk, Clinical, Pharmacy, Laboratory and Finance modules — see the other role guides (download "All Roles" PDF) for their day-to-day workflows.',
@@ -61,6 +73,7 @@ function help_roles(): array
             'tips' => [
                 'Change the default admin password immediately (Profile → Security).',
                 'Use the Audit Log regularly to review sensitive changes.',
+                'Run Cloud Backup (Supabase) weekly — and before any big data change — so you always have an offsite copy of the clinic database.',
             ],
         ],
 
@@ -84,7 +97,7 @@ function help_roles(): array
                 ]],
                 ['Finance', 'fa-file-invoice-dollar', [
                     'Invoices, payments, insurance claims and expenses for your branch.',
-                    'Reports → branch-filtered finance reports; export for your monthly summary.',
+                    'Reports → Monthly Profit & Loss shows revenue vs expenses (including payroll) for your branch.',
                 ]],
                 ['People & Master Data', 'fa-user-doctor', [
                     'Keep doctors, staff, departments, specializations and services up to date for your branch.',
@@ -93,6 +106,7 @@ function help_roles(): array
             'tips' => [
                 'Records you create are automatically tagged with your branch.',
                 'If a patient from another branch visits, ask a Super Admin — branch data is isolated on purpose.',
+                'Ask a Super Admin to run System Settings → Cloud Backup weekly — offsite Supabase backups protect all branches\' data.',
             ],
         ],
 
@@ -116,6 +130,12 @@ function help_roles(): array
                 ['Live Queue', 'fa-list-ol', [
                     'Front Desk → Live Queue shows waiting patients; reception calls them in and you treat them in order.',
                     'Use the queue board instead of paper numbers — it refreshes automatically.',
+                ]],
+                ['OPD Referrals', 'fa-bed-pulse', [
+                    'Front Desk → OPD Referrals: send a patient to OPD, Laboratory, Pharmacy or Doctor with vitals (BP, temperature, weight, pulse).',
+                    'Old patient? Just search their name or code — no re-registration needed.',
+                    'Receiving departments press Receive, work on the patient, then Transfer (e.g. Lab → Pharmacy) or Complete.',
+                    'Vitals entered when sending are saved to the patient\'s file automatically.',
                 ]],
                 ['Medical Records', 'fa-file-medical', [
                     'Clinical → Medical Records → open patient → Add Record: fill visit date, symptoms, diagnosis and notes; Save.',
@@ -165,6 +185,10 @@ function help_roles(): array
                     'Use Call, In Room, Skip, Recall and Complete buttons to move patients through the clinic.',
                     'The "Now Serving" card always shows who is with the doctor.',
                 ]],
+                ['OPD Referrals', 'fa-bed-pulse', [
+                    'Front Desk → OPD Referrals: search the patient (old patients work too — just search, no re-registration), record vitals like BP, choose where to send (OPD, Lab, Pharmacy, Doctor) and press Send.',
+                    'Track every sent patient in the receiving department\'s queue; each department can transfer the patient onward (e.g. Lab → Pharmacy after results).',
+                ]],
                 ['Billing', 'fa-file-invoice-dollar', [
                     'Finance → New Invoice: pick the patient, add services with quantities, Save — the invoice is numbered automatically.',
                     'Finance → Invoices: track unpaid/partial invoices; open one to record payment details.',
@@ -193,12 +217,15 @@ function help_roles(): array
             ],
             'modules' => [
                 ['Medicines & Stock', 'fa-pills', [
-                    'Pharmacy → Medicines & Stock: Add Medicine with name, category, unit, purchase/selling price, stock quantity, expiry and reorder level.',
-                    'Edit a medicine to adjust stock (deliveries) — the system warns when stock falls below the reorder level.',
+                    'Pharmacy → Medicines & Stock: Add Medicine with name, category, unit (individual), selling price per unit, pack size (units per pack) and expiry.',
+                    'Add Stock by Pack: press the Packs button and enter how many packs arrived — the system converts to individual units automatically (packs × pack size) and shows what remains.',
+                    'The stock column shows both: individual units and packs (e.g. 250 tablets = 5 packs + 50 units when a pack holds 40).',
+                    'The system warns when stock falls below the reorder level.',
                 ]],
                 ['Prescriptions to Dispense', 'fa-clipboard-check', [
                     'Pharmacy → Prescriptions to Dispense lists prescriptions sent by doctors with patient, prescriber and items.',
-                    'Open one, confirm availability, dispense; stock is deducted automatically. Mark it dispensed to close it.',
+                    'Open one, confirm availability, dispense; each line sells individual units — stock is deducted unit by unit and the remaining units/packs are shown.',
+                    'Sales → Details shows every line: quantity in units, unit price at sale time, line total and remaining stock.',
                 ]],
                 ['Dispensing & Sales', 'fa-bag-shopping', [
                     'Pharmacy → Dispensing & Sales: New Sale, pick items and quantities for walk-in customers, complete the sale and take payment.',
@@ -227,6 +254,7 @@ function help_roles(): array
                     'Each order shows patient, ordering doctor, test and status.',
                     'Start an order when the sample is taken (status → in progress).',
                     'Enter Result: fill values and notes, then complete it — the doctor sees the result immediately.',
+                    'OPD referrals sent to the lab appear in Front Desk → OPD Referrals (Laboratory tab); when you complete the results the patient transfers to Pharmacy automatically.',
                 ]],
                 ['Patients', 'fa-hospital-user', [
                     'View-only access to patient details so you can match samples to the right person.',
@@ -267,6 +295,7 @@ function help_roles(): array
                     'Finance → Expenses: log expense date, category, amount and notes; keep receipts attached where possible.',
                 ]],
                 ['Reports', 'fa-chart-line', [
+                    'Reports → Monthly Profit & Loss: collected revenue, operating expenses, salaries/payroll cost and net profit for the period.',
                     'Reports → finance reports: income vs expenses, revenue by service, outstanding invoices — filter by date range and branch, export where available.',
                 ]],
                 ['Master Data', 'fa-database', [

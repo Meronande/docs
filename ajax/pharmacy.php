@@ -41,10 +41,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && get('form') === 'medicine') {
         echo '<option value="' . (int) $c['id'] . '" ' . ((string) ($m['category_id'] ?? '') === (string) $c['id'] ? 'selected' : '') . '>' . e($c['category_name']) . '</option>';
     }
     echo '</select></div>';
-    echo '<div class="col-md-4"><label class="form-label">Unit</label><input class="form-control" name="unit" value="' . e($m['unit'] ?? '') . '" placeholder="Tablet / Bottle / Vial"></div>';
-    echo '<div class="col-md-4"><label class="form-label required">Selling Price</label><input type="number" step="0.01" min="0" class="form-control" name="selling_price" value="' . e(money_raw($m['selling_price'] ?? 0)) . '" required></div>';
-    echo '<div class="col-md-4"><label class="form-label">Purchase Price</label><input type="number" step="0.01" min="0" class="form-control" name="purchase_price" value="' . e(money_raw($m['purchase_price'] ?? 0)) . '"></div>';
-    echo '<div class="col-md-3"><label class="form-label">Stock Qty</label><input type="number" class="form-control" name="stock_quantity" value="' . e((string) ($m['stock_quantity'] ?? 0)) . '"></div>';
+    echo '<div class="col-md-4"><label class="form-label">Unit (individual)</label><input class="form-control" name="unit" value="' . e($m['unit'] ?? '') . '" placeholder="Tablet / Bottle / Vial"></div>';
+    echo '<div class="col-md-4"><label class="form-label required">Selling Price (per ' . e($m['unit'] ?: 'unit') . ')</label><input type="number" step="0.01" min="0" class="form-control" name="selling_price" value="' . e(money_raw($m['selling_price'] ?? 0)) . '" required></div>';
+    echo '<div class="col-md-4"><label class="form-label">Purchase Price (per unit)</label><input type="number" step="0.01" min="0" class="form-control" name="purchase_price" value="' . e(money_raw($m['purchase_price'] ?? 0)) . '"></div>';
+    echo '<div class="col-md-3"><label class="form-label">Pack Size (units per pack)</label><input type="number" min="1" class="form-control" name="pack_size" value="' . e((string) ($m['pack_size'] ?? 1)) . '"></div>';
+    echo '<div class="col-md-3"><label class="form-label">Pack Purchase Price</label><input type="number" step="0.01" min="0" class="form-control" name="pack_purchase_price" value="' . e(money_raw($m['pack_purchase_price'] ?? 0)) . '"></div>';
+    echo '<div class="col-md-3"><label class="form-label">Stock (individual units)</label><input type="number" class="form-control" name="stock_quantity" value="' . e((string) ($m['stock_quantity'] ?? 0)) . '"><div class="form-text">Register packs via “Add Stock” instead.</div></div>';
     echo '<div class="col-md-3"><label class="form-label">Minimum Stock</label><input type="number" class="form-control" name="minimum_stock" value="' . e((string) ($m['minimum_stock'] ?? 10)) . '"></div>';
     echo '<div class="col-md-3"><label class="form-label">Expiry Date</label><input type="date" class="form-control" name="expiry_date" value="' . e($m['expiry_date'] ?? '') . '"></div>';
     echo '<div class="col-md-3"><label class="form-label">Supplier</label><select class="form-select" name="supplier_id"><option value="">— None —</option>';
@@ -72,7 +74,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && get('rx') !== '') {
          WHERE r.id = ?', [$rxId], 'i');
     if (!$rx) json_response(['ok' => false, 'message' => 'Prescription not found.'], 404);
     assert_branch_access($rx['branch_id'] !== null ? (int) $rx['branch_id'] : null);
-    $items = db_fetch_all('SELECT pi.*, med.medicine_name, med.stock_quantity, med.selling_price, med.unit
+    $items = db_fetch_all('SELECT pi.*, med.medicine_name, med.stock_quantity, med.selling_price, med.unit, med.pack_size
                            FROM prescription_items pi LEFT JOIN medicines med ON med.id = pi.medicine_id
                            WHERE pi.prescription_id = ?', [$rxId], 'i');
 
@@ -96,8 +98,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && get('rx') !== '') {
         echo '<input type="hidden" name="items_' . $i . '_flag" value="1">';
         echo '<input type="hidden" name="items_' . $i . '_medicine_id" value="' . (int) ($it['medicine_id'] ?? 0) . '">';
         echo '<input type="hidden" name="items_' . $i . '_name" value="' . e($it['medicine_name'] ?? $it['medicine_name_free'] ?? '') . '">';
-        echo '<div class="col-4"><label class="form-label small">Qty to dispense</label><input type="number" min="0" max="' . max($available, 0) . '" class="form-control form-control-sm disp-qty" name="items_' . $i . '_qty" value="' . ($it['medicine_id'] ? (int) $it['quantity'] : 0) . '"></div>';
-        echo '<div class="col-4"><label class="form-label small">Unit price</label><input type="number" step="0.01" min="0" class="form-control form-control-sm disp-price" name="items_' . $i . '_price" value="' . e(money_raw($it['selling_price'] ?? 0)) . '"></div>';
+        $packSize = max(1, (int) (($it['pack_size'] ?? 1) ?: 1));
+        $packsAvail = intdiv($available, $packSize);
+        $unitsAvail = $available % $packSize;
+        echo '<div class="col-4"><label class="form-label small">Qty to dispense (units)</label><input type="number" min="0" max="' . max($available, 0) . '" class="form-control form-control-sm disp-qty" name="items_' . $i . '_qty" value="' . ($it['medicine_id'] ? (int) $it['quantity'] : 0) . '">';
+        echo '<div class="form-text">Remaining: ' . $available . ' ' . e($it['unit'] ?: 'units') . ' = ' . $packsAvail . ' pack(s) + ' . $unitsAvail . ' units</div></div>';
+        $unitPrice = (float) ($it['selling_price'] ?? 0);
+        echo '<div class="col-4"><label class="form-label small">Unit price (set on medicine)</label><input type="text" class="form-control form-control-sm disp-price bg-light" value="' . e(money_raw($unitPrice)) . '" readonly>';
+        echo '<div class="form-text">' . ($it['medicine_id'] ? 'Auto-charged from the medicine record.' : 'Free-text item — no price set.') . '</div></div>';
         echo '<div class="col-4"><label class="form-label small">Line total</label><input class="form-control form-control-sm disp-total" value="0.00" disabled></div>';
         echo '</div></div>';
     }
@@ -148,6 +156,8 @@ if (post('action') === 'save_medicine') {
         'unit' => post('unit') ?: null,
         'purchase_price' => post('purchase_price') !== '' ? (float) post('purchase_price') : 0,
         'selling_price' => post('selling_price') !== '' ? (float) post('selling_price') : 0,
+        'pack_size' => max(1, (int) post('pack_size', '1')),
+        'pack_purchase_price' => post('pack_purchase_price') !== '' ? (float) post('pack_purchase_price') : null,
         'stock_quantity' => (int) post('stock_quantity', '0'),
         'minimum_stock' => (int) post('minimum_stock', '10'),
         'expiry_date' => $expiry !== '' ? $expiry : null,
@@ -199,6 +209,78 @@ if (post('action') === 'save_medicine') {
 }
 
 // ---------------------------------------------------------------------
+// Add stock by pack: packs × pack_size units added; auto-derives unit
+// purchase price from the pack price when supplied.
+// ---------------------------------------------------------------------
+if (post('action') === 'add_stock') {
+    if (!has_permission('pharmacy.edit')) json_response(['ok' => false, 'message' => 'Permission denied.'], 403);
+    $id = (int) post('id', '0');
+    $packs = (int) post('packs', '0');
+    $packPrice = post('pack_price') !== '' ? (float) post('pack_price') : null;
+    $med = db_fetch_one('SELECT * FROM medicines WHERE id = ?', [$id], 'i');
+    if (!$med) json_response(['ok' => false, 'message' => 'Medicine not found.'], 404);
+    if ($packs <= 0) json_response(['ok' => false, 'message' => 'Enter the number of packs to add.']);
+    $packSize = max(1, (int) ($med['pack_size'] ?: 1));
+    $unitsToAdd = $packs * $packSize;
+    $newQty = (int) $med['stock_quantity'] + $unitsToAdd;
+
+    db_transaction(function () use ($id, $newQty, $packPrice, $med, $packs, $packSize, $unitsToAdd) {
+        if ($packPrice !== null && $packPrice > 0) {
+            $unitPurchase = round($packPrice / $packSize, 4);
+            db_execute('UPDATE medicines SET stock_quantity = ?, purchase_price = ?, pack_purchase_price = ? WHERE id = ?', [$newQty, $unitPurchase, $packPrice, $id]);
+        } else {
+            db_execute('UPDATE medicines SET stock_quantity = ?, pack_purchase_price = COALESCE(pack_purchase_price, pack_purchase_price) WHERE id = ?', [$newQty, $id]);
+        }
+        audit_log('update', 'Medicine', $id, 'Added stock: ' . $packs . ' pack(s) × ' . $packSize . ' = ' . $unitsToAdd . ' units for ' . $med['medicine_name'] . ' (now ' . $newQty . ' units)');
+    });
+
+    if ($newQty <= (int) $med['minimum_stock']) {
+        notify(['permission_key' => 'pharmacy.view', 'branch_id' => $med['branch_id']],
+            'Low Stock Alert', $med['medicine_name'] . ' has only ' . $newQty . ' ' . ($med['unit'] ?? 'units') . ' remaining.', 'pharmacy', 'medicine', $id, '/pharmacy?filter=low');
+    }
+    json_response(['ok' => true, 'message' => 'Added ' . $packs . ' pack(s) = ' . $unitsToAdd . ' ' . ($med['unit'] ?: 'units') . '. Remaining stock: ' . $newQty . ' units (' . intdiv($newQty, $packSize) . ' packs + ' . ($newQty % $packSize) . ' units).']);
+}
+
+// ---------------------------------------------------------------------
+// Sale details: full line-by-line detail for one sale
+// ---------------------------------------------------------------------
+if ($_SERVER['REQUEST_METHOD'] === 'GET' && get('sale') !== '') {
+    if (!has_permission('pharmacy.view')) json_response(['ok' => false, 'message' => 'Permission denied.'], 403);
+    $saleId = (int) get('sale');
+    $sale = db_fetch_one(
+        'SELECT s.*, p.full_name patient_name, p.patient_code, u.full_name sold_by_name
+         FROM pharmacy_sales s
+         LEFT JOIN patients p ON p.id = s.patient_id
+         LEFT JOIN users u ON u.id = s.sold_by
+         WHERE s.id = ?', [$saleId], 'i');
+    if (!$sale) json_response(['ok' => false, 'message' => 'Sale not found.'], 404);
+    assert_branch_access($sale['branch_id'] !== null ? (int) $sale['branch_id'] : null);
+    $lines = db_fetch_all(
+        'SELECT si.*, m.medicine_name, m.unit, m.pack_size, m.stock_quantity remaining_units
+         FROM pharmacy_sale_items si JOIN medicines m ON m.id = si.medicine_id
+         WHERE si.sale_id = ?', [$saleId], 'i');
+
+    ob_start();
+    echo '<div class="small text-muted mb-2">Sale <strong>' . e($sale['sale_code'] ?? '') . '</strong> · '
+        . e($sale['patient_name'] ?? 'Walk-in') . ' (' . e($sale['patient_code'] ?? '—') . ') · '
+        . fmt_date($sale['created_at'], true) . ' · sold by ' . e(or_na($sale['sold_by_name'])) . '</div>';
+    echo '<table class="table table-sm"><thead class="table-light"><tr><th>Medicine</th><th>Qty (units)</th><th>Unit Price</th><th>Total</th><th>Remaining</th></tr></thead><tbody>';
+    foreach ($lines as $l) {
+        $ps = max(1, (int) ($l['pack_size'] ?: 1));
+        $unitPrice = $l['unit_price_at_sale'] !== null ? (float) $l['unit_price_at_sale'] : (float) $l['unit_price'];
+        echo '<tr>';
+        echo '<td class="small fw-semibold">' . e($l['medicine_name']) . '</td>';
+        echo '<td class="small">' . (int) $l['quantity'] . ' ' . e($l['unit'] ?: 'units') . '</td>';
+        echo '<td class="small">' . money($unitPrice) . '</td>';
+        echo '<td class="small">' . money($l['total']) . '</td>';
+        echo '<td class="small text-muted">' . (int) $l['remaining_units'] . ' ' . e($l['unit'] ?: 'units') . ' (' . intdiv((int) $l['remaining_units'], $ps) . ' pk + ' . ((int) $l['remaining_units'] % $ps) . ')</td>';
+        echo '</tr>';
+    }
+    echo '</tbody><tfoot class="table-light fw-bold"><tr><td colspan="3" class="text-end">Total</td><td>' . money($sale['total_amount']) . '</td><td></td></tr></tfoot></table>';
+    json_response(['ok' => true, 'html' => ob_get_clean()]);
+}
+
+// ---------------------------------------------------------------------
 // Stock adjust
 // ---------------------------------------------------------------------
 if (post('action') === 'adjust') {
@@ -228,14 +310,15 @@ if (post('action') === 'dispense') {
     if (!$rx) json_response(['ok' => false, 'message' => 'Prescription not found.'], 404);
     if ($rx['status'] !== 'pending') json_response(['ok' => false, 'message' => 'This prescription is not pending.']);
 
+    // Unit prices are NEVER taken from the request — they are locked in from
+    // each medicine's set selling_price inside the transaction below.
     $items = [];
     $i = 0;
     while (isset($_POST["items_{$i}_flag"])) {
         $qty = (int) ($_POST["items_{$i}_qty"] ?? 0);
         $medId = (int) ($_POST["items_{$i}_medicine_id"] ?? 0);
-        $price = (float) ($_POST["items_{$i}_price"] ?? 0);
         if ($qty > 0 && $medId > 0) {
-            $items[] = ['medicine_id' => $medId, 'qty' => $qty, 'price' => $price, 'name' => (string) ($_POST["items_{$i}_name"] ?? '')];
+            $items[] = ['medicine_id' => $medId, 'qty' => $qty, 'price' => null, 'name' => ''];
         }
         $i++;
         if ($i > 50) break;
@@ -246,16 +329,21 @@ if (post('action') === 'dispense') {
         $result = db_transaction(function () use ($items, $rx, $rxId) {
             $branchId = $rx['branch_id'] !== null ? (int) $rx['branch_id'] : (current_user()['branch_id'] !== null ? (int) current_user()['branch_id'] : null);
 
-            // Validate stock
-            foreach ($items as $it) {
-                $med = db_fetch_one('SELECT medicine_name, stock_quantity FROM medicines WHERE id = ? FOR UPDATE', [$it['medicine_id']], 'i');
+            // Validate stock and lock in each price from the medicine record
+            foreach ($items as &$it) {
+                $med = db_fetch_one('SELECT medicine_name, stock_quantity, pack_size, unit, selling_price FROM medicines WHERE id = ? FOR UPDATE', [$it['medicine_id']], 'i');
                 if (!$med) throw new RuntimeException('Medicine not found: #' . $it['medicine_id']);
+                // The pharmacist never types the price — it is charged from the medicine's set price.
+                $it['price'] = (float) $med['selling_price'];
+                $it['name'] = (string) $med['medicine_name'];
                 if ((int) $med['stock_quantity'] < $it['qty']) {
-                    throw new RuntimeException('Insufficient stock for ' . $med['medicine_name'] . ' (need ' . $it['qty'] . ', have ' . (int) $med['stock_quantity'] . ')');
+                    $ps = max(1, (int) ($med['pack_size'] ?: 1));
+                    throw new RuntimeException('Insufficient stock for ' . $med['medicine_name'] . ' (need ' . $it['qty'] . ' ' . ($med['unit'] ?: 'units') . ', have ' . (int) $med['stock_quantity'] . ' = ' . intdiv((int) $med['stock_quantity'], $ps) . ' pack(s) + ' . ((int) $med['stock_quantity'] % $ps) . ' units)');
                 }
             }
+            unset($it);
 
-            // Reduce stock
+            // Reduce stock (units are the source of truth)
             foreach ($items as $it) {
                 db_execute('UPDATE medicines SET stock_quantity = stock_quantity - ? WHERE id = ?', [$it['qty'], $it['medicine_id']], 'ii');
             }
@@ -266,8 +354,8 @@ if (post('action') === 'dispense') {
             $saleId = db_execute('INSERT INTO pharmacy_sales (sale_code, prescription_id, patient_id, branch_id, total_amount, sold_by) VALUES (?,?,?,?,?,?)',
                 [$saleCode, $rxId, $rx['patient_id'], $branchId, $total, (int) current_user()['id']]);
             foreach ($items as $it) {
-                db_execute('INSERT INTO pharmacy_sale_items (sale_id, medicine_id, quantity, unit_price, total) VALUES (?,?,?,?,?)',
-                    [$saleId, $it['medicine_id'], $it['qty'], $it['price'], $it['qty'] * $it['price']]);
+                db_execute('INSERT INTO pharmacy_sale_items (sale_id, medicine_id, quantity, unit_price, total, unit_price_at_sale) VALUES (?,?,?,?,?,?)',
+                    [$saleId, $it['medicine_id'], $it['qty'], $it['price'], $it['qty'] * $it['price'], $it['price']]);
             }
 
             // Optional invoice
@@ -296,10 +384,23 @@ if (post('action') === 'dispense') {
                 }
             }
             audit_log('pharmacy_sale', 'Pharmacy', $saleId, 'Dispensed ' . $saleCode . ' (total ' . money($total) . ')');
-            return ['sale' => $saleCode, 'total' => $total];
+            // Remaining stock summary for the response
+            $remaining = [];
+            foreach ($items as $it) {
+                $m = db_fetch_one('SELECT medicine_name, stock_quantity, pack_size, unit FROM medicines WHERE id = ?', [$it['medicine_id']], 'i');
+                if ($m) {
+                    $ps = max(1, (int) ($m['pack_size'] ?: 1));
+                    $remaining[] = $m['medicine_name'] . ': ' . (int) $m['stock_quantity'] . ' ' . ($m['unit'] ?: 'units') . ' (' . intdiv((int) $m['stock_quantity'], $ps) . ' pk + ' . ((int) $m['stock_quantity'] % $ps) . ')';
+                }
+            }
+            return ['sale' => $saleCode, 'total' => $total, 'remaining' => $remaining];
         });
 
-        json_response(['ok' => true, 'message' => 'Dispensed ' . $result['sale'] . ' — total ' . money($result['total']) . '. Stock updated.']);
+        $msg = 'Dispensed ' . $result['sale'] . ' — total ' . money($result['total']) . '.';
+        if (!empty($result['remaining'])) {
+            $msg .= ' Remaining — ' . implode('; ', $result['remaining']) . '.';
+        }
+        json_response(['ok' => true, 'message' => $msg, 'remaining' => $result['remaining'] ?? []]);
     } catch (RuntimeException $ex) {
         json_response(['ok' => false, 'message' => $ex->getMessage()]);
     } catch (Throwable $ex) {

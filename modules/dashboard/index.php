@@ -6,6 +6,7 @@ declare(strict_types=1);
 define('APP_BOOT', true);
 require_once dirname(__DIR__, 2) . '/config/auth.php';
 require_once dirname(__DIR__, 2) . '/includes/ui.php';
+require_once dirname(__DIR__, 2) . '/config/payroll.php';
 require_permission('dashboard.view');
 
 $range = get('range', 'month');       // today | week | month | year | custom
@@ -172,6 +173,39 @@ $lowStockList = db_fetch_all(
     $aParams
 );
 
+// Money-value alerts: expired stock (potential loss) + at-risk expiring stock.
+$expiredValue = expired_stock_value($branchId);
+$expiringValue = expiring_soon_value($branchId, (int) setting('low_stock_alert_days', '30'));
+$reorderValue = low_stock_reorder_value($branchId);
+
+// ---------------------------------------------------------------------
+// Super Admin stock alerts (deduplicated: max one per item per week)
+// ---------------------------------------------------------------------
+if (has_permission('pharmacy.view')) {
+    if ($expired > 0 && $expiredValue > 0) {
+        notifySuperAdmins(
+            'Expired drugs in stock',
+            $expired . ' expired medicine item(s) worth ' . money($expiredValue) . ' are still in stock. Dispose of them to write off the loss.',
+            'danger',
+            'pharmacy_alert',
+            null,
+            '/pharmacy?filter=expired',
+            $branchId
+        );
+    }
+    if ($lowStock > 0) {
+        notifySuperAdmins(
+            'Low stock medicines',
+            $lowStock . ' medicine item(s) are at or below minimum stock. Estimated reorder cost: ' . money($reorderValue) . '.',
+            'warning',
+            'pharmacy_alert',
+            null,
+            '/pharmacy?filter=low',
+            $branchId
+        );
+    }
+}
+
 ui_page_open(['title' => 'Dashboard', 'icon' => 'fa-gauge-high']);
 ?>
 <div class="d-flex flex-wrap gap-2 align-items-center mb-4">
@@ -268,11 +302,14 @@ ui_page_open(['title' => 'Dashboard', 'icon' => 'fa-gauge-high']);
         <?php endforeach; ?>
       </div>
       <div class="col-lg-5">
-        <h6 class="small text-muted text-uppercase">Expiry</h6>
+        <h6 class="small text-muted text-uppercase">Expiry — money at risk</h6>
         <div class="d-flex gap-2 mt-2">
-          <div class="flex-fill stat-card"><div class="stat-value soft-danger"><?= (int) $expired ?></div><div class="stat-label">Expired</div></div>
-          <div class="flex-fill stat-card"><div class="stat-value soft-warning"><?= (int) $expiringSoon ?></div><div class="stat-label">Expiring soon (<?= (int) setting('low_stock_alert_days', '30') ?>d)</div></div>
+          <div class="flex-fill stat-card"><div class="stat-value soft-danger"><?= money($expiredValue) ?></div><div class="stat-label">Expired loss risk (<?= (int) $expired ?> items)</div></div>
+          <div class="flex-fill stat-card"><div class="stat-value soft-warning"><?= money($expiringValue) ?></div><div class="stat-label">Expiring ≤<?= (int) setting('low_stock_alert_days', '30') ?>d</div></div>
         </div>
+        <?php if ($reorderValue > 0): ?>
+        <div class="small text-muted mt-2"><i class="fa-solid fa-cart-plus me-1"></i>Reorder cost for low-stock items: <strong><?= money($reorderValue) ?></strong></div>
+        <?php endif; ?>
       </div>
     </div>
   </div>

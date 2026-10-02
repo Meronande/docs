@@ -5,6 +5,7 @@
 declare(strict_types=1);
 define('APP_BOOT', true);
 require_once dirname(__DIR__, 2) . '/config/auth.php';
+require_once dirname(__DIR__, 2) . '/config/payroll.php';
 require_once dirname(__DIR__, 2) . '/includes/ui.php';
 require_permission('pharmacy.view');
 
@@ -51,6 +52,8 @@ echo stat_card('Total Medicines', $stats['total'], 'fa-pills', 'brand');
 echo stat_card('Low Stock', $stats['low'], 'fa-arrow-trend-down', 'danger', '/pharmacy?filter=low');
 echo stat_card('Expired', $stats['expired'], 'fa-skull-crossbones', 'danger', '/pharmacy?filter=expired');
 echo stat_card('Expiring Soon', $stats['expiring'], 'fa-hourglass-half', 'warning', '/pharmacy?filter=expiring');
+echo stat_card('Expired Loss Risk', money(expired_stock_value(scope_branch_id())), 'fa-money-loss', 'danger', '/pharmacy?filter=expired');
+echo stat_card('Expiring Value', money(expiring_soon_value(scope_branch_id(), (int) setting('low_stock_alert_days', '30'))), 'fa-hourglass', 'warning', '/pharmacy?filter=expiring');
 echo '</div>';
 
 echo '<div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">';
@@ -73,22 +76,26 @@ if (has_permission('pharmacy.create')) echo '<button class="btn btn-brand" data-
 echo '</div>';
 
 echo '<div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">';
-echo '<thead><tr><th>Code</th><th>Medicine</th><th>Category</th><th>Stock</th><th>Min</th><th>Price</th><th>Expiry</th><th>Branch</th><th class="text-end">Actions</th></tr></thead><tbody>';
+echo '<thead><tr><th>Code</th><th>Medicine</th><th>Category</th><th>Stock (units / packs)</th><th>Min</th><th>Price (per unit)</th><th>Expiry</th><th>Branch</th><th class="text-end">Actions</th></tr></thead><tbody>';
 if (!$rows) echo '<tr><td colspan="9" class="text-center text-muted py-4">No medicines found</td></tr>';
 foreach ($rows as $m) {
     $id = (int) $m['id'];
     $stock = (int) $m['stock_quantity'];
     $min = (int) $m['minimum_stock'];
+    $packSize = max(1, (int) ($m['pack_size'] ?: 1));
+    $packs = intdiv($stock, $packSize);
+    $looseUnits = $stock % $packSize;
     $isLow = $stock <= $min;
     $isExpired = $m['expiry_date'] && strtotime((string) $m['expiry_date']) < time();
     $isExpiring = !$isExpired && $m['expiry_date'] && strtotime((string) $m['expiry_date']) <= strtotime('+' . (int) setting('low_stock_alert_days', '30') . ' days');
+    $noPrice = (float) $m['selling_price'] <= 0;
     echo '<tr' . ($isExpired ? ' class="table-danger"' : ($isLow ? ' class="table-warning"' : '')) . '>';
     echo '<td class="small text-nowrap">' . e($m['medicine_code'] ?? '—') . '</td>';
     echo '<td><div class="fw-semibold">' . e($m['medicine_name']) . '</div><div class="small text-muted">' . e(or_na($m['generic_name'])) . '</div></td>';
     echo '<td class="small">' . e(or_na($m['category_name'])) . '</td>';
-    echo '<td><span class="badge ' . ($isLow ? 'text-bg-danger' : 'text-bg-success') . '">' . $stock . ' ' . e(or_na($m['unit'])) . '</span></td>';
+    echo '<td><span class="badge ' . ($isLow ? 'text-bg-danger' : 'text-bg-success') . '">' . $stock . ' ' . e(or_na($m['unit'])) . '</span><div class="small text-muted">' . $packs . ' pack' . ($packs === 1 ? '' : 's') . ' + ' . $looseUnits . ' units <span class="text-muted">(1 pk = ' . $packSize . ')</span></div></td>';
     echo '<td class="small text-muted">' . $min . '</td>';
-    echo '<td class="small">' . money($m['selling_price']) . '</td>';
+    echo '<td class="small">' . money($m['selling_price']) . ($noPrice ? ' <span class="badge text-bg-warning" title="Set the selling price on this medicine so the pharmacy charges it correctly.">price not set</span>' : '') . ($m['pack_purchase_price'] ? '<div class="small text-muted">' . money($m['pack_purchase_price']) . '/pack</div>' : '') . '</td>';
     echo '<td class="small text-nowrap">' . fmt_date($m['expiry_date']);
     if ($isExpired) echo ' <span class="badge text-bg-danger">expired</span>';
     elseif ($isExpiring) echo ' <span class="badge text-bg-warning">soon</span>';
@@ -96,15 +103,74 @@ foreach ($rows as $m) {
     echo '<td class="small">' . e(or_na($m['branch_name'])) . '</td>';
     echo '<td class="text-end text-nowrap">';
     if (has_permission('pharmacy.edit')) {
-        echo '<button class="btn btn-sm btn-light" data-action="edit" data-id="' . $id . '" data-url="/ajax/pharmacy?form=medicine" data-title="Medicine"><i class="fa-solid fa-pen"></i></button> ';
-        echo '<button class="btn btn-sm btn-light" data-action="stock-add" data-id="' . $id . '" title="Add stock (+10)"><i class="fa-solid fa-plus"></i></button> ';
-        echo '<button class="btn btn-sm btn-light" data-action="stock-sub" data-id="' . $id . '" title="Remove stock (-10)"><i class="fa-solid fa-minus"></i></button> ';
+        echo '<button class="btn btn-sm btn-brand" data-bs-toggle="modal" data-bs-target="#addStockModal" data-id="' . $id . '" data-name="' . e($m['medicine_name']) . '" data-pack-size="' . $packSize . '" title="Add stock by pack"><i class="fa-solid fa-boxes-stacked me-1"></i>Packs</button> ';
+        echo '<button class="btn btn-sm btn-light" data-action="edit" data-id="' . $id . '" data-url="/ajax/pharmacy?form=medicine" data-title="Medicine" title="Edit"><i class="fa-solid fa-pen"></i></button> ';
+        echo '<button class="btn btn-sm btn-light" data-action="stock-add" data-id="' . $id . '" title="Add 10 units"><i class="fa-solid fa-plus"></i></button> ';
+        echo '<button class="btn btn-sm btn-light" data-action="stock-sub" data-id="' . $id . '" title="Remove 10 units"><i class="fa-solid fa-minus"></i></button> ';
     }
     echo '</td></tr>';
 }
 echo '</tbody></table></div>';
 echo '<div class="d-flex justify-content-between align-items-center p-3"><span class="small text-muted">' . result_count_label() . '</span>' . pagination_links() . '</div>';
 echo '</div></div>';
+
+if (has_permission('pharmacy.edit')):
+?>
+<div class="modal fade" id="addStockModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form id="addStockForm">
+        <div class="modal-header"><h5 class="modal-title">Add Stock by Pack</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label">Medicine</label><input class="form-control" id="asMedName" disabled></div>
+          <div class="row g-3">
+            <div class="col-6"><label class="form-label required">Number of packs</label><input type="number" min="1" step="1" class="form-control" name="packs" value="1" required></div>
+            <div class="col-6"><label class="form-label">Pack price (optional)</label><input type="number" min="0" step="0.01" class="form-control" name="pack_price" placeholder="e.g. 240.00"></div>
+          </div>
+          <div class="form-text" id="asHint"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-brand"><i class="fa-solid fa-boxes-stacked me-1"></i>Add to Stock</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  let packSize = 1, medId = null;
+  const modal = document.getElementById('addStockModal');
+  modal?.addEventListener('show.bs.modal', function (ev) {
+    const btn = ev.relatedTarget;
+    if (!btn) return;
+    medId = btn.dataset.id;
+    packSize = parseInt(btn.dataset.packSize || '1', 10);
+    document.getElementById('asMedName').value = btn.dataset.name + ' (1 pack = ' + packSize + ' units)';
+    updHint();
+  });
+  function updHint() {
+    const packs = parseInt(modal.querySelector('[name=packs]').value || '0', 10);
+    document.getElementById('asHint').textContent = packs > 0 ? ('= ' + (packs * packSize) + ' individual units will be added to stock.') : '';
+  }
+  modal?.querySelector('[name=packs]')?.addEventListener('input', updHint);
+  document.getElementById('addStockForm')?.addEventListener('submit', async function (ev) {
+    ev.preventDefault();
+    const fd = new FormData(ev.target);
+    const data = await App.postJSON('/ajax/pharmacy', {
+      action: 'add_stock', id: medId,
+      packs: fd.get('packs'), pack_price: fd.get('pack_price') || ''
+    });
+    if (data.ok) {
+      bootstrap.Modal.getInstance(modal)?.hide();
+      App.toast(data.message, 'success');
+      setTimeout(() => location.reload(), 500);
+    } else App.toast(data.message || 'Failed.', 'danger');
+  });
+});
+</script>
+<?php endif;
+
 
 echo <<<'JS'
 <script>
