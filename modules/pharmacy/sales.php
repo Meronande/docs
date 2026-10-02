@@ -47,8 +47,8 @@ echo '<input type="date" name="from" class="form-control form-control-sm" value=
 echo '<input type="date" name="to" class="form-control form-control-sm" value="' . e($toF) . '" style="width:145px">';
 echo '<button class="btn btn-sm btn-outline-brand">Filter</button></form></div>';
 echo '<div class="table-responsive"><table class="table table-hover align-middle mb-0">';
-echo '<thead><tr><th>Sale Code</th><th>Patient</th><th>Items</th><th>Total</th><th>Date</th><th>Branch</th></tr></thead><tbody>';
-if (!$rows) echo '<tr><td colspan="6" class="text-center text-muted py-4">No sales found</td></tr>';
+echo '<thead><tr><th>Sale Code</th><th>Patient</th><th>Items</th><th>Total</th><th>Date</th><th>Branch</th><th class="text-end">Details</th></tr></thead><tbody>';
+if (!$rows) echo '<tr><td colspan="7" class="text-center text-muted py-4">No sales found</td></tr>';
 foreach ($rows as $s) {
     echo '<tr>';
     echo '<td class="fw-semibold text-nowrap">' . e($s['sale_code'] ?? '—') . '</td>';
@@ -57,9 +57,36 @@ foreach ($rows as $s) {
     echo '<td class="fw-semibold">' . money($s['total_amount']) . '</td>';
     echo '<td class="small">' . fmt_date($s['created_at'], true) . '</td>';
     echo '<td class="small">' . e(or_na($s['branch_name'])) . '</td>';
+    echo '<td class="text-end"><button class="btn btn-sm btn-light border" data-action="sale-detail" data-id="' . (int) $s['id'] . '"><i class="fa-solid fa-receipt me-1"></i>Details</button></td>';
     echo '</tr>';
 }
 echo '</tbody></table></div>';
 echo '<div class="d-flex justify-content-between align-items-center p-3"><span class="small text-muted">' . result_count_label() . '</span>' . pagination_links() . '</div>';
 echo '</div>';
+?>
+<div class="modal fade" id="saleDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Sale Details</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body" id="saleDetailBody"><div class="text-center py-4"><span class="spinner-border text-secondary"></span></div></div>
+      <div class="modal-footer"><button type="button" class="btn btn-light" data-bs-dismiss="modal">Close</button></div>
+    </div>
+  </div>
+</div>
+<script>
+document.addEventListener('click', async function (ev) {
+  const btn = ev.target.closest('[data-action="sale-detail"]');
+  if (!btn) return;
+  const body = document.getElementById('saleDetailBody');
+  body.innerHTML = '<div class="text-center py-4"><span class="spinner-border text-secondary"></span></div>';
+  bootstrap.Modal.getOrCreateInstance(document.getElementById('saleDetailModal')).show();
+  try {
+    const data = await App.getJSON('/ajax/pharmacy?sale=' + btn.dataset.id);
+    body.innerHTML = data.ok ? data.html : '<div class="alert alert-danger">' + App.escapeHtml(data.message || 'Not found.') + '</div>';
+  } catch (e) {
+    body.innerHTML = '<div class="alert alert-danger">Could not load details.</div>';
+  }
+});
+</script>
+<?php
 ui_page_close();

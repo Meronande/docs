@@ -294,6 +294,62 @@ check('help module outputs attachment header (via SimplePdf->output)', strpos($h
 check('help module guards unknown roles with 404', strpos($helpModule, 'errors/404.php') !== false);
 
 // ==========================================================================
+section('Supabase integration (config/supabase.php)');
+require dirname(__DIR__) . '/config/supabase.php';
+check('supabase_url exists', function_exists('supabase_url'));
+check('supabase_key exists', function_exists('supabase_key'));
+check('supabase_enabled exists', function_exists('supabase_enabled'));
+check('supabase_request exists', function_exists('supabase_request'));
+check('supabase_health exists', function_exists('supabase_health'));
+check('supabase_storage_ensure_bucket exists', function_exists('supabase_storage_ensure_bucket'));
+check('supabase_storage_upload exists', function_exists('supabase_storage_upload'));
+check('supabase_storage_list exists', function_exists('supabase_storage_list'));
+
+// Configured-mode assertions run in a subprocess so putenv cannot leak.
+// The URL uses the reserved .invalid TLD so the request fails fast/offline
+// (no network dependency); we assert the failure is reported gracefully.
+$envCode = "putenv('SUPABASE_URL=https://supabase-selftest.invalid'); putenv('SUPABASE_ANON_KEY=anon-x'); putenv('SUPABASE_SERVICE_ROLE_KEY=svc-y');"
+    . ' require ' . var_export(dirname(__DIR__) . '/config/supabase.php', true) . ';'
+    . ' echo json_encode([supabase_url(), supabase_enabled(), supabase_key(\'anon\'), supabase_key(\'service\'), supabase_backup_bucket(), supabase_request(\'GET\', \'/rest/v1/\')[\'message\']]);';
+$envOut = (string) @shell_exec(escapeshellarg(PHP_BINARY) . ' -d error_reporting=0 -r ' . escapeshellarg($envCode) . ' 2>/dev/null');
+$env = json_decode($envOut, true);
+check('configured url parsed (trailing slash stripped)', is_array($env) && $env[0] === 'https://supabase-selftest.invalid');
+check('enabled with URL + anon key', is_array($env) && $env[1] === true);
+check('anon key readable', is_array($env) && $env[2] === 'anon-x');
+check('service key readable', is_array($env) && $env[3] === 'svc-y');
+check('backup bucket is clinic-backups', is_array($env) && $env[4] === 'clinic-backups');
+check('unreachable host fails gracefully', is_array($env) && is_string($env[5]) && stripos($env[5], 'Connection to Supabase failed') !== false);
+
+$unCode = 'require ' . var_export(dirname(__DIR__) . '/config/supabase.php', true) . ';'
+    . ' echo json_encode([supabase_url(), supabase_enabled(), supabase_request(\'GET\', \'/rest/v1/\')[\'message\']]);';
+$unOut = (string) @shell_exec(escapeshellarg(PHP_BINARY) . ' -d error_reporting=0 -r ' . escapeshellarg($unCode) . ' 2>/dev/null');
+$un = json_decode($unOut, true);
+check('unconfigured url empty', is_array($un) && $un[0] === '');
+check('unconfigured disabled', is_array($un) && $un[1] === false);
+check('unconfigured request reports SUPABASE_URL missing', is_array($un) && is_string($un[2]) && stripos($un[2], 'SUPABASE_URL') !== false);
+
+$sbAjax = file_get_contents("$root/ajax/supabase.php");
+check('ajax endpoint permission-guarded', strpos($sbAjax, "require_permission('settings.manage')") !== false);
+check('ajax endpoint loads supabase config', strpos($sbAjax, 'config/supabase.php') !== false);
+$settingsPage = file_get_contents("$root/modules/settings/index.php");
+check('settings page has Supabase card', strpos($settingsPage, 'Cloud Backup (Supabase)') !== false);
+check('settings card guarded by settings.manage', strpos($settingsPage, 'sbTest') !== false && strpos($settingsPage, 'sbBackup') !== false);
+
+// ==========================================================================
+section('Pharmacy auto-pricing (price set on drug, never typed at dispense)');
+$phSrc = file_get_contents("$root/ajax/pharmacy.php");
+check('dispense form shows read-only unit price', strpos($phSrc, 'disp-price bg-light') !== false && strpos($phSrc, '" readonly>') !== false);
+check('dispense form no longer accepts a typed price', strpos($phSrc, "_price\"] ?? 0") === false);
+check('dispense reads selling_price FOR UPDATE', strpos($phSrc, 'pack_size, unit, selling_price FROM medicines WHERE id = ? FOR UPDATE') !== false);
+check('sale price derived from medicine record server-side', strpos($phSrc, "it['price'] = (float) \$med['selling_price']") !== false);
+check('dispense form explains price source', strpos($phSrc, 'Unit price (set on medicine)') !== false && strpos($phSrc, 'Free-text item — no price set.') !== false);
+$phIdx = file_get_contents("$root/modules/pharmacy/index.php");
+check('medicines list flags drugs with no price', strpos($phIdx, 'price not set') !== false);
+check('medicines table rendered exactly once', substr_count($phIdx, 'No medicines found') === 1);
+$salesSrc = file_get_contents("$root/modules/pharmacy/sales.php");
+check('sales page has no stray layout close outside PHP', strpos($salesSrc, "</script>\nui_page_close();") === false);
+
+// ==========================================================================
 echo "\n========================================\n";
 echo "PASSED: $passes   FAILED: $failures\n";
 echo "========================================\n";

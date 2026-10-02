@@ -1102,3 +1102,132 @@ SELECT b.id, r.id, 'System Administrator','admin','admin@clinic.local','+251 900
        '$2y$10$2W1FRa6chmvvF6syseF6VeZePhq/HSRiIGUikeXIpZUyMYXVcIMNq', 1
 FROM branches b JOIN roles r
 WHERE b.branch_code='BR-001' AND r.role_name='Super Admin';
+
+-- =====================================================================
+-- PAYROLL SYSTEM (Super Admin)
+-- =====================================================================
+
+CREATE TABLE IF NOT EXISTS payroll_periods (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  period_month CHAR(7) NOT NULL COMMENT 'YYYY-MM',
+  branch_id INT UNSIGNED NULL,
+  status ENUM('draft','approved','paid') NOT NULL DEFAULT 'draft',
+  total_gross DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  total_deductions DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  total_net DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+  notes VARCHAR(255) NULL,
+  created_by INT UNSIGNED NULL,
+  approved_by INT UNSIGNED NULL,
+  paid_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_payroll_period_branch (period_month, branch_id),
+  KEY idx_payroll_period_month (period_month),
+  KEY idx_payroll_period_branch (branch_id),
+  CONSTRAINT fk_payroll_period_branch FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE SET NULL,
+  CONSTRAINT fk_payroll_period_creator FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_payroll_period_approver FOREIGN KEY (approved_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS payroll_items (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  period_id INT UNSIGNED NOT NULL,
+  staff_id INT UNSIGNED NOT NULL,
+  basic_salary DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  bonus DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  overtime DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  advance_deduction DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  other_deduction DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  net_pay DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+  paid_at DATETIME NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_payroll_item (period_id, staff_id),
+  KEY idx_payroll_item_staff (staff_id),
+  CONSTRAINT fk_payroll_item_period FOREIGN KEY (period_id) REFERENCES payroll_periods (id) ON DELETE CASCADE,
+  CONSTRAINT fk_payroll_item_staff FOREIGN KEY (staff_id) REFERENCES staff (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Payroll permissions ----------------------------------------------------------------
+INSERT INTO permissions (permission_name, permission_key, module, description)
+SELECT * FROM (
+  SELECT 'View Payroll' AS permission_name, 'payroll.view' AS permission_key, 'Payroll' AS module, 'View payroll periods & payslips' AS description
+  UNION ALL SELECT 'Manage Payroll', 'payroll.manage', 'Payroll', 'Create/approve/pay payroll periods'
+  UNION ALL SELECT 'Delete Payroll', 'payroll.delete', 'Payroll', 'Delete draft payroll periods'
+) new_perms
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE permission_key IN ('payroll.view','payroll.manage','payroll.delete'));
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r
+JOIN permissions p ON p.permission_key IN ('payroll.view','payroll.manage','payroll.delete')
+WHERE r.role_name = 'Super Admin'
+  AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+
+INSERT INTO settings (setting_key, setting_value, setting_type)
+SELECT 'payroll_day', '30', 'number' FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM settings WHERE setting_key = 'payroll_day');
+
+INSERT INTO expense_categories (category_name)
+SELECT 'Payroll' FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM expense_categories WHERE category_name = 'Payroll');
+
+-- =====================================================================
+-- PACK-BASED STOCK + OPD INTERNAL REFERRALS
+-- =====================================================================
+
+ALTER TABLE medicines
+  ADD COLUMN IF NOT EXISTS pack_size INT UNSIGNED NOT NULL DEFAULT 1 COMMENT 'Units per pack',
+  ADD COLUMN IF NOT EXISTS pack_purchase_price DECIMAL(12,2) NULL COMMENT 'Price per pack (purchase)';
+
+ALTER TABLE pharmacy_sale_items
+  ADD COLUMN IF NOT EXISTS unit_price_at_sale DECIMAL(12,2) NULL COMMENT 'Selling price per unit when sold';
+
+CREATE TABLE IF NOT EXISTS opd_sends (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  patient_id INT UNSIGNED NOT NULL,
+  visit_id INT UNSIGNED NULL,
+  branch_id INT UNSIGNED NULL,
+  destination ENUM('laboratory','pharmacy','od','doctor') NOT NULL DEFAULT 'od',
+  vitals_blood_pressure VARCHAR(20) NULL,
+  vitals_temperature DECIMAL(4,1) NULL,
+  vitals_weight DECIMAL(5,2) NULL,
+  vitals_pulse VARCHAR(20) NULL,
+  complaint VARCHAR(255) NULL,
+  note VARCHAR(255) NULL,
+  status ENUM('pending','received','completed','transferred','cancelled') NOT NULL DEFAULT 'pending',
+  lab_order_id INT UNSIGNED NULL,
+  prescription_id INT UNSIGNED NULL,
+  sent_by INT UNSIGNED NULL,
+  received_by INT UNSIGNED NULL,
+  transferred_from ENUM('laboratory','pharmacy','od','doctor') NULL,
+  transferred_at DATETIME NULL,
+  completed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_opd_send_patient (patient_id),
+  KEY idx_opd_send_branch (branch_id),
+  KEY idx_opd_send_dest_status (destination, status),
+  KEY idx_opd_send_visit (visit_id),
+  CONSTRAINT fk_opd_send_patient FOREIGN KEY (patient_id) REFERENCES patients (id) ON DELETE CASCADE,
+  CONSTRAINT fk_opd_send_visit FOREIGN KEY (visit_id) REFERENCES visits (id) ON DELETE SET NULL,
+  CONSTRAINT fk_opd_send_branch FOREIGN KEY (branch_id) REFERENCES branches (id) ON DELETE SET NULL,
+  CONSTRAINT fk_opd_send_lab FOREIGN KEY (lab_order_id) REFERENCES lab_orders (id) ON DELETE SET NULL,
+  CONSTRAINT fk_opd_send_rx FOREIGN KEY (prescription_id) REFERENCES prescriptions (id) ON DELETE SET NULL,
+  CONSTRAINT fk_opd_send_sender FOREIGN KEY (sent_by) REFERENCES users (id) ON DELETE SET NULL,
+  CONSTRAINT fk_opd_send_receiver FOREIGN KEY (received_by) REFERENCES users (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO permissions (permission_name, permission_key, module, description)
+SELECT 'Send OPD Referrals', 'opd.send', 'OPD', 'Send patients to OPD, lab or pharmacy'
+WHERE NOT EXISTS (SELECT 1 FROM permissions WHERE permission_key = 'opd.send');
+
+INSERT INTO role_permissions (role_id, permission_id)
+SELECT r.id, p.id FROM roles r
+JOIN permissions p ON p.permission_key = 'opd.send'
+WHERE r.role_name IN ('Super Admin', 'Branch Admin', 'Receptionist', 'Doctor', 'Laboratory Technician')
+  AND NOT EXISTS (SELECT 1 FROM role_permissions rp WHERE rp.role_id = r.id AND rp.permission_id = p.id);
+
+INSERT INTO settings (setting_key, setting_value, setting_type)
+SELECT 'default_pack_size', '1', 'number' FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM settings WHERE setting_key = 'default_pack_size');

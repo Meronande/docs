@@ -159,6 +159,105 @@ ui_page_open(['title' => 'System Settings', 'icon' => 'fa-gear', 'breadcrumb' =>
   <?php endforeach; ?>
 </div>
 
+<?php require_once dirname(__DIR__, 2) . '/config/supabase.php'; ?>
+<div class="card mt-3">
+  <div class="card-header py-2 d-flex align-items-center flex-wrap gap-2">
+    <span><i class="fa-solid fa-cloud-arrow-up me-2 text-brand"></i>Cloud Backup (Supabase)</span>
+    <?php if ($canManage): ?>
+      <span class="ms-auto d-flex gap-2">
+        <button type="button" class="btn btn-sm btn-light border" id="sbTest"><i class="fa-solid fa-plug-circle-check me-1"></i>Test Connection</button>
+        <button type="button" class="btn btn-sm btn-light border" id="sbList"><i class="fa-solid fa-list me-1"></i>List Backups</button>
+        <button type="button" class="btn btn-sm btn-brand" id="sbBackup"><i class="fa-solid fa-database me-1"></i>Back Up Now</button>
+      </span>
+    <?php endif; ?>
+  </div>
+  <div class="card-body">
+    <?php $sbConfigured = supabase_enabled(); ?>
+    <?php if (!$sbConfigured): ?>
+      <div class="alert alert-warning mb-2 py-2 small">
+        <i class="fa-solid fa-key me-2"></i>Supabase is not configured yet. Add <code>SUPABASE_URL</code>, <code>SUPABASE_ANON_KEY</code>
+        and <code>SUPABASE_SERVICE_ROLE_KEY</code> in the Keys tab, then reload this page.
+        <code>SUPABASE_URL</code> looks like <code>https://abcdefgh.supabase.co</code>.
+      </div>
+    <?php endif; ?>
+    <div class="small text-muted mb-2">
+      Creates a full SQL dump of the clinic database (schema + data) and uploads it to a private <code>clinic-backups</code>
+      bucket in your Supabase project, stored offsite under <code>backups/&lt;year&gt;/&lt;month&gt;/</code>.
+      Restore any file on a MySQL/MariaDB server.
+    </div>
+    <div id="sbStatus" class="small text-muted"></div>
+    <div id="sbFiles" class="mt-2"></div>
+  </div>
+</div>
+<script>
+(function () {
+  var btnTest = document.getElementById('sbTest'),
+      btnBackup = document.getElementById('sbBackup'),
+      btnList = document.getElementById('sbList');
+  if (!btnTest && !btnBackup && !btnList) return;
+  var sbConfigured = <?= $sbConfigured ? 'true' : 'false' ?>;
+  var status = document.getElementById('sbStatus'),
+      files = document.getElementById('sbFiles');
+
+  function esc(s) { var d = document.createElement('div'); d.textContent = String(s == null ? '' : s); return d.innerHTML; }
+  function fmtSize(n) { n = n || 0; return n >= 1048576 ? (n / 1048576).toFixed(2) + ' MB' : (n >= 1024 ? (n / 1024).toFixed(1) + ' KB' : n + ' B'); }
+  function busy(on) { [btnTest, btnBackup, btnList].forEach(function (b) { if (b) b.disabled = on; }); }
+  function say(html, cls) { status.className = 'small ' + (cls || 'text-muted'); status.innerHTML = html; }
+
+  function renderFiles(list) {
+    if (!list || !list.length) { files.innerHTML = '<div class="text-muted small">No backups stored yet.</div>'; return; }
+    var rows = list.map(function (f) {
+      var when = (f.created || '').replace('T', ' ').slice(0, 19);
+      return '<tr><td class="text-break">' + esc(f.name) + '</td><td class="text-nowrap small">' + esc(when) +
+        '</td><td class="text-end text-nowrap small">' + fmtSize(f.size) + '</td></tr>';
+    }).join('');
+    files.innerHTML = '<div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0">' +
+      '<thead><tr><th>Backup file</th><th>Uploaded</th><th class="text-end">Size</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
+
+  async function run(action, btn, busyLabel) {
+    var old = btn.innerHTML;
+    busy(true); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i>' + busyLabel;
+    try {
+      var r = await App.postJSON('/ajax/supabase', { action: action });
+      if (r.ok) {
+        if (action === 'test') {
+          say('<i class="fa-solid fa-circle-check text-success me-1"></i>' + esc(r.message || 'Connected.'), 'text-success');
+        } else if (action === 'backup') {
+          say('<i class="fa-solid fa-circle-check text-success me-1"></i>' + esc(r.message || 'Backup uploaded.') +
+            ' <span class="text-muted">(' + esc(r.object || '') + ' — ' + r.rows + ' rows, ' + r.size_mb + ' MB)</span>', 'text-success');
+          loadBackups();
+        } else {
+          renderFiles(r.files || []);
+          say('<i class="fa-solid fa-circle-check text-success me-1"></i>' + ((r.files || []).length) + ' backup file(s) found.', 'text-success');
+        }
+      } else {
+        say('<i class="fa-solid fa-circle-exclamation text-danger me-1"></i>' + esc(r.message || 'Request failed.'), 'text-danger');
+      }
+    } catch (e) {
+      say('<i class="fa-solid fa-circle-exclamation text-danger me-1"></i>Request failed: ' + esc(e && e.message ? e.message : e), 'text-danger');
+    } finally {
+      busy(false); btn.innerHTML = old;
+    }
+  }
+
+  async function loadBackups() {
+    if (!sbConfigured) return;
+    try {
+      var r = await App.postJSON('/ajax/supabase', { action: 'list' });
+      if (r.ok) renderFiles(r.files || []);
+    } catch (e) { /* silent — bucket may not exist yet */ }
+  }
+
+  if (btnTest) btnTest.addEventListener('click', function () { run('test', btnTest, 'Testing…'); });
+  if (btnList) btnList.addEventListener('click', function () { run('list', btnList, 'Loading…'); });
+  if (btnBackup) btnBackup.addEventListener('click', function () {
+    if (confirm('Create and upload a full database backup to Supabase now?')) run('backup', btnBackup, 'Backing up…');
+  });
+  document.addEventListener('DOMContentLoaded', function () { loadBackups(); });
+})();
+</script>
+
 <?php if ($canManage): ?>
   <div class="d-flex gap-2 mt-3">
     <button type="submit" class="btn btn-brand"><i class="fa-solid fa-floppy-disk me-1"></i>Save All Settings</button>

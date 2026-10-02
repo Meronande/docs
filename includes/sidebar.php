@@ -20,6 +20,7 @@ $menu = [
         ['appointments.view', 'Appointments', '/appointments', 'fa-calendar-check'],
         ['appointments.create', 'New Appointment', '/appointments?new=1', 'fa-calendar-plus'],
         ['queue.view', 'Live Queue', '/queue', 'fa-list-ol'],
+        ['opd.send', 'OPD Referrals', '/opd', 'fa-bed-pulse'],
     ]],
     ['medical.view', 'Clinical', null, null, [
         ['medical.view', 'Medical Records', '/medical', 'fa-file-medical'],
@@ -49,6 +50,7 @@ $menu = [
         ['users.view', 'Users', '/users', 'fa-users-gear'],
         ['branches.view', 'Branches', '/branches', 'fa-building'],
         ['roles.view', 'Roles & Permissions', '/roles', 'fa-user-shield'],
+        ['payroll.view', 'Payroll', '/payroll', 'fa-money-check-dollar'],
         ['masterdata.view', 'Master Data', '/masterdata', 'fa-database'],
         ['reports.view', 'Reports', '/reports', 'fa-chart-line'],
         ['audit.view', 'Audit Log', '/audit', 'fa-clipboard-list'],
