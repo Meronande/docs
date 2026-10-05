@@ -438,11 +438,17 @@ require_once $root . '/config/school.php';
 $rows = school_spreadsheet_rows($tmpCsv, 'teachers.csv');
 check('csv reader returns data rows', is_array($rows) && count($rows) === 3);
 check('csv reader trims cells and skips blank lines', is_array($rows) && isset($rows[1]) && $rows[1] === ['Alice Test', 'a@x.test', '0911', 'BSc']);
-$xlsxFailed = false;
+$xlsxThrew = false;
+$xlsxMsg = '';
 try { school_spreadsheet_rows($tmpCsv, 'teachers.xlsx'); } catch (RuntimeException $ex) {
-    $xlsxFailed = class_exists('ZipArchive') ? false : (stripos($ex->getMessage(), 'CSV') !== false);
+    $xlsxThrew = true;
+    $xlsxMsg = $ex->getMessage();
 }
-check('xlsx without zip extension fails with save-as-CSV guidance', $xlsxFailed);
+// Non-xlsx bytes must be rejected with helpful guidance in every environment:
+// servers without zip tell the user to save as CSV; servers with zip report
+// the file could not be opened. The static check above pins the CSV wording.
+check('invalid .xlsx content rejected with guidance',
+    $xlsxThrew && (stripos($xlsxMsg, 'CSV') !== false || stripos($xlsxMsg, 'xlsx') !== false));
 $docxText = school_docx_text($tmpCsv);
 check('docx text extraction returns null on non-docx/no zip', $docxText === null);
 unlink($tmpCsv);
