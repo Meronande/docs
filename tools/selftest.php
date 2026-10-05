@@ -350,6 +350,110 @@ $salesSrc = file_get_contents("$root/modules/pharmacy/sales.php");
 check('sales page has no stray layout close outside PHP', strpos($salesSrc, "</script>\nui_page_close();") === false);
 
 // ==========================================================================
+section('School module (LMS): teachers, classes, marks, exams, attendance');
+$schoolCfg = file_get_contents("$root/config/school.php");
+foreach (
+    ['school_current_teacher', 'school_teacher_allocations', 'school_teacher_homerooms',
+     'school_categories_total', 'school_class_label', 'school_exam_dir',
+     'school_spreadsheet_rows', 'school_csv_rows', 'school_xlsx_rows', 'school_docx_text'] as $fn
+) {
+    check("config/school.php defines $fn", strpos($schoolCfg, "function $fn(") !== false);
+}
+check('xlsx reader degrades gracefully without zip extension',
+    strpos($schoolCfg, "class_exists('ZipArchive')") !== false);
+check('xlsx error tells user to save as CSV', strpos($schoolCfg, 'save the file as CSV') !== false);
+
+$schoolAjax = file_get_contents("$root/ajax/school.php");
+check('ajax/school.php uses app bootstrap', strpos($schoolAjax, "config/auth.php'") !== false && strpos($schoolAjax, 'config/school.php') !== false);
+check('POST actions require CSRF token', strpos($schoolAjax, 'require_csrf()') !== false);
+foreach (
+    ['school_require_manage', 'school_can_touch_class', 'school_owned_allocation',
+     'school_assert_categories_complete', 'school_create_teacher_user'] as $fn
+) {
+    check("ajax/school.php defines $fn", strpos($schoolAjax, "function $fn(") !== false);
+}
+check('allocation ownership enforced (403 for other teachers)',
+    strpos($schoolAjax, 'This class is not allocated to you.') !== false);
+check('category add rejected when total would exceed 100',
+    strpos($schoolAjax, 'must be exactly 100') !== false);
+check('marks and exams blocked until categories total 100',
+    substr_count($schoolAjax, 'school_assert_categories_complete(') >= 2);
+check('teacher bulk upload detects header row',
+    strpos($schoolAjax, "in_array('full name', \$first, true)") !== false);
+check('bulk upload creates a login per teacher',
+    strpos($schoolAjax, 'school_create_teacher_user($name') !== false);
+check('exam upload accepts only .docx', strpos($schoolAjax, "Only .docx exam files are allowed") !== false);
+check('exam upload caps size at 10 MB', strpos($schoolAjax, 'max 10 MB') !== false);
+check('exam upload MIME-checked including zip types',
+    strpos($schoolAjax, 'application/zip') !== false && strpos($schoolAjax, 'wordprocessingml.document') !== false);
+check('exam file stored under assets/uploads/exams',
+    strpos($schoolAjax, "'exams/' . \$stored") !== false);
+
+$schoolPages = [
+    'index.php' => ['school.view', 'Upload by Excel'],
+    'students.php' => ['school.view', 'Guardian'],
+    'setup.php' => ['school.manage', 'Grades'],
+    'homeroom.php' => ['school.manage', 'Homeroom'],
+    'allocations.php' => ['school.manage', 'Allocation'],
+    'categories.php' => ['school.manage', '/100'],
+    'marks.php' => ['school.teach', 'exactly 100'],
+    'exams.php' => ['school.teach', '.docx'],
+    'attendance.php' => ['school.teach', 'present'],
+    'reports.php' => ['school.view', 'Attendance'],
+];
+foreach ($schoolPages as $page => [$perm, $needle]) {
+    $src = (string) @file_get_contents("$root/modules/school/$page");
+    check("school page $page guarded by $perm", strpos($src, "require_permission('$perm')") !== false);
+    check("school page $page has '$needle'", $src !== '' && stripos($src, $needle) !== false);
+}
+$schoolJs = file_get_contents("$root/modules/school/_js.php");
+check('school JS posts via FormData with CSRF header',
+    strpos($schoolJs, 'FormData') !== false && strpos($schoolJs, 'X-CSRF-Token') !== false);
+$schoolInit = file_get_contents("$root/modules/school/_init.php");
+check('school pages share _init bootstrap',
+    strpos($schoolInit, "config/auth.php'") !== false && strpos($schoolInit, 'config/school.php') !== false);
+
+$schoolMig = file_get_contents("$root/database/migration_school.sql");
+foreach (['grades', 'sections', 'subjects', 'school_teachers', 'school_students', 'school_homerooms',
+          'school_allocations', 'school_mark_categories', 'school_marks', 'school_exams', 'school_attendance'] as $tbl) {
+    check("migration creates $tbl", strpos($schoolMig, "CREATE TABLE IF NOT EXISTS $tbl (") !== false);
+}
+check('migration seeds teacher_prefix setting', strpos($schoolMig, "'teacher_prefix'") !== false);
+check('migration seeds student_prefix setting', strpos($schoolMig, "'student_prefix'") !== false);
+
+$settingsSrc = file_get_contents("$root/modules/settings/index.php");
+check('settings page exposes school prefixes',
+    strpos($settingsSrc, "'teacher_prefix'") !== false && strpos($settingsSrc, "'student_prefix'") !== false);
+$sidebarSrc = file_get_contents("$root/includes/sidebar.php");
+check('sidebar has School group guarded by school.view',
+    strpos($sidebarSrc, "'school.view', 'School'") !== false);
+check('sidebar school items permission-filtered',
+    strpos($sidebarSrc, "'/school/marks'") !== false && strpos($sidebarSrc, "'/school/attendance'") !== false);
+
+// Functional: CSV parsing (no DB touched).
+$tmpCsv = tempnam(sys_get_temp_dir(), 'selftest_school_');
+file_put_contents($tmpCsv, "Full Name,Email,Phone,Qualification\nAlice Test,a@x.test,0911,BSc\n\nBob Test,b@x.test,0912,MSc\n");
+require_once $root . '/config/functions.php';
+require_once $root . '/config/school.php';
+$rows = school_spreadsheet_rows($tmpCsv, 'teachers.csv');
+check('csv reader returns data rows', is_array($rows) && count($rows) === 3);
+check('csv reader trims cells and skips blank lines', is_array($rows) && isset($rows[1]) && $rows[1] === ['Alice Test', 'a@x.test', '0911', 'BSc']);
+$xlsxThrew = false;
+$xlsxMsg = '';
+try { school_spreadsheet_rows($tmpCsv, 'teachers.xlsx'); } catch (RuntimeException $ex) {
+    $xlsxThrew = true;
+    $xlsxMsg = $ex->getMessage();
+}
+// Non-xlsx bytes must be rejected with helpful guidance in every environment:
+// servers without zip tell the user to save as CSV; servers with zip report
+// the file could not be opened. The static check above pins the CSV wording.
+check('invalid .xlsx content rejected with guidance',
+    $xlsxThrew && (stripos($xlsxMsg, 'CSV') !== false || stripos($xlsxMsg, 'xlsx') !== false));
+$docxText = school_docx_text($tmpCsv);
+check('docx text extraction returns null on non-docx/no zip', $docxText === null);
+unlink($tmpCsv);
+
+// ==========================================================================
 echo "\n========================================\n";
 echo "PASSED: $passes   FAILED: $failures\n";
 echo "========================================\n";

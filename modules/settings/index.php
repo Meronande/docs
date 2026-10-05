@@ -26,6 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'lab_prefix', 'payment_prefix', 'queue_prefix', 'doctor_prefix', 'staff_prefix',
         'medicine_prefix', 'sale_prefix', 'claim_prefix', 'visit_prefix',
         'branch_prefix', 'service_prefix', 'diagnosis_prefix',
+        'teacher_prefix', 'student_prefix',
         'session_timeout_minutes', 'low_stock_alert_days',
     ];
 
@@ -89,6 +90,8 @@ $sections = [
         'branch_prefix'      => ['Branch Prefix', 'text', ''],
         'service_prefix'     => ['Service Prefix', 'text', ''],
         'diagnosis_prefix'   => ['Diagnosis Prefix', 'text', ''],
+        'teacher_prefix'     => ['School Teacher Prefix', 'text', 'Teacher codes are generated as PREFIX-000001'],
+        'student_prefix'     => ['School Student Prefix', 'text', 'Student codes are generated as PREFIX-000001'],
     ],
     'Security & Alerts' => [
         'session_timeout_minutes' => ['Session Timeout (minutes)', 'number', 'Users are logged out after this idle time'],
