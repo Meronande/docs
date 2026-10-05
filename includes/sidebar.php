@@ -40,6 +40,18 @@ $menu = [
         ['insurance.view', 'Insurance', '/insurance', 'fa-shield-halved'],
         ['expenses.view', 'Expenses', '/expenses', 'fa-receipt'],
     ]],
+    ['school.view', 'School', null, null, [
+        ['school.view', 'Teachers', '/school', 'fa-chalkboard-user'],
+        ['school.view', 'Students', '/school/students', 'fa-user-graduate'],
+        ['school.manage', 'Academic Setup', '/school/setup', 'fa-graduation-cap'],
+        ['school.manage', 'Homeroom', '/school/homeroom', 'fa-house-flag'],
+        ['school.manage', 'Allocations', '/school/allocations', 'fa-diagram-project'],
+        ['school.manage', 'Mark Categories', '/school/categories', 'fa-scale-balanced'],
+        ['school.teach', 'Marks', '/school/marks', 'fa-pen-to-square'],
+        ['school.teach', 'Online Exams', '/school/exams', 'fa-file-word'],
+        ['school.teach', 'Attendance', '/school/attendance', 'fa-calendar-day'],
+        ['school.view', 'Class Reports', '/school/reports', 'fa-chart-simple'],
+    ]],
     ['doctors.view', 'People', null, null, [
         ['doctors.view', 'Doctors', '/doctors', 'fa-user-doctor'],
         ['staff.view', 'Staff (HR)', '/staff', 'fa-users'],
